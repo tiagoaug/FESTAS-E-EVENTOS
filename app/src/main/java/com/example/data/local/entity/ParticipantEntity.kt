@@ -13,5 +13,7 @@ data class ParticipantEntity(
     val type: ParticipantType = ParticipantType.ADULT,
     val familyGroup: String = "Sem Família",
     val paidAmount: Double = 0.0,
-    val notes: String = ""
+    val notes: String = "",
+    /** Confirmação de presença no evento. */
+    val confirmed: Boolean = false
 )

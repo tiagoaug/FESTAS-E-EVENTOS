@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.ExportUtils
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
@@ -26,10 +27,12 @@ import com.example.ui.viewmodel.PartyViewModel
 fun InvitationsScreen(
     uiState: PartyUiState,
     viewModel: PartyViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activeEvent = uiState.activeEvent
+    val useWhatsApp by viewModel.useWhatsApp.collectAsStateWithLifecycle()
 
     var templateText by remember(activeEvent) {
         mutableStateOf(
@@ -53,6 +56,47 @@ fun InvitationsScreen(
             .replace("{data}", sampleDate)
             .replace("{local}", sampleLocation)
             .replace("{valor}", sampleValue)
+    }
+
+    if (!useWhatsApp) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Convites & WhatsApp", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Chat,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "O WhatsApp está desativado em Configurações.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onNavigateToSettings) {
+                    Text("Abrir Configurações")
+                }
+            }
+        }
+        return
     }
 
     Scaffold(

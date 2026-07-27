@@ -2,8 +2,11 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,24 +17,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.local.entity.EventEntity
 import com.example.ui.components.BudgetVsSpentChart
 import com.example.ui.components.CountdownCard
 import com.example.ui.components.ExportUtils
 import com.example.ui.components.FinancialSummaryCard
+import com.example.ui.components.LocationMapCard
+import com.example.ui.components.ShareCenterDialog
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
-import dev.shreyaspatil.capturable.capturable
-import dev.shreyaspatil.capturable.controller.rememberCaptureController
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -43,74 +50,64 @@ fun DashboardScreen(
     onNavigateToParticipants: () -> Unit,
     onNavigateToExpenses: () -> Unit,
     onNavigateToPayments: () -> Unit,
-    onNavigateToInvitations: () -> Unit
+    onNavigateToInvitations: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val captureController = rememberCaptureController()
-    var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var showEventSelector by remember { mutableStateOf(false) }
+    var showShareCenter by remember { mutableStateOf(false) }
+    val useWhatsApp by viewModel.useWhatsApp.collectAsStateWithLifecycle()
 
     val activeEvent = uiState.activeEvent
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
+            // Cabeçalho customizado (em vez de TopAppBar de altura fixa) para que
+            // títulos longos + subtítulo nunca fiquem cortados/espremidos.
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = activeEvent?.title ?: "Festas & Eventos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (activeEvent != null) {
                             Text(
-                                text = activeEvent?.title ?: "Festas & Eventos",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                text = "🎉 ${activeEvent.eventType} • ${activeEvent.location}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (activeEvent != null) {
-                                Text(
-                                    text = "🎉 ${activeEvent.eventType} • ${activeEvent.location}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        if (uiState.events.size > 1) {
-                            IconButton(onClick = { showEventSelector = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = "Selecionar Evento"
-                                )
-                            }
                         }
                     }
-                },
-                actions = {
+                    if (uiState.events.size > 1) {
+                        IconButton(onClick = { showEventSelector = true }) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Selecionar Evento"
+                            )
+                        }
+                    }
                     IconButton(onClick = onNavigateToSetup) {
                         Icon(
                             imageVector = Icons.Default.EditCalendar,
                             contentDescription = "Configurar Evento"
                         )
                     }
-                    IconButton(onClick = {
-                        if (activeEvent != null) {
-                            ExportUtils.exportFinancialSummaryPdf(
-                                context = context,
-                                event = activeEvent,
-                                summary = uiState.financialSummary,
-                                participants = uiState.participants,
-                                expenses = uiState.expenses
-                            )
-                        }
-                    }) {
+                    IconButton(onClick = onNavigateToSettings) {
                         Icon(
-                            imageVector = Icons.Default.PictureAsPdf,
-                            contentDescription = "Exportar PDF",
-                            tint = Color(0xFFD32F2F)
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Configurações"
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+                }
+            }
         }
     ) { innerPadding ->
         if (activeEvent == null) {
@@ -133,9 +130,9 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .nestedScroll(rememberNestedScrollInteropConnection())
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
-                    .capturable(captureController),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 1. Countdown Hero Card
@@ -146,7 +143,10 @@ fun DashboardScreen(
                     }
                 )
 
-                // Quick Export & Calendar Actions Banner
+                // Location Map (minimized by default)
+                LocationMapCard(location = activeEvent.location)
+
+                // Quick Actions & Sharing Banner
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -159,33 +159,11 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        try {
-                                            previewBitmap = captureController.captureAsync().await()
-                                        } catch (error: Throwable) {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Erro ao capturar tela: ${error.message}",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Exportar JPG", style = MaterialTheme.typography.labelMedium)
-                            }
 
+                        if (useWhatsApp) {
                             Button(
                                 onClick = onNavigateToInvitations,
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
                             ) {
@@ -193,6 +171,17 @@ fun DashboardScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Enviar Convites", style = MaterialTheme.typography.labelMedium, color = Color.White)
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        OutlinedButton(
+                            onClick = { showShareCenter = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Painel de Compartilhamento", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -203,7 +192,8 @@ fun DashboardScreen(
                 // 3. Budget vs Spent Category Chart
                 BudgetVsSpentChart(
                     budget = activeEvent.budget,
-                    expenses = uiState.expenses
+                    expenses = uiState.expenses,
+                    categories = uiState.categories
                 )
 
                 // Module Navigation Shortcut Grid
@@ -253,113 +243,168 @@ fun DashboardScreen(
                         onClick = onNavigateToPayments
                     )
 
-                    ShortcutCard(
-                        title = "Convites WhatsApp",
-                        subtitle = "Modelos & Envio",
-                        icon = Icons.Default.Chat,
-                        bgColor = com.example.ui.theme.ActionPinkContainer,
-                        iconTint = com.example.ui.theme.ActionPinkOn,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToInvitations
-                    )
+                    if (useWhatsApp) {
+                        ShortcutCard(
+                            title = "Convites WhatsApp",
+                            subtitle = "Modelos & Envio",
+                            icon = Icons.Default.Chat,
+                            bgColor = com.example.ui.theme.ActionPinkContainer,
+                            iconTint = com.example.ui.theme.ActionPinkOn,
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToInvitations
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
-        // Event Selector Dialog
+        // Event Selector Dialog ("Meus Eventos"), no estilo da versão web
         if (showEventSelector) {
-            AlertDialog(
-                onDismissRequest = { showEventSelector = false },
-                title = { Text("Selecionar Evento") },
-                text = {
-                    Column {
-                        uiState.events.forEach { ev ->
-                            TextButton(
-                                onClick = {
-                                    viewModel.selectActiveEvent(ev.id)
+            Dialog(onDismissRequest = { showEventSelector = false }) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(20.dp)
+                            .heightIn(max = 560.dp)
+                    ) {
+                        Text(
+                            text = "Meus Eventos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primaryContainer,
+                                            MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                )
+                                .clickable {
                                     showEventSelector = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                                    onNavigateToSetup()
+                                }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Adicionar Novo Evento",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            uiState.events.forEach { ev ->
+                                val isActive = ev.id == activeEvent?.id
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                            else MaterialTheme.colorScheme.surface
+                                        )
+                                        .border(
+                                            width = if (isActive) 1.5.dp else 1.dp,
+                                            color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable {
+                                            viewModel.selectActiveEvent(ev.id)
+                                            showEventSelector = false
+                                        }
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = ev.title,
-                                        fontWeight = if (ev.id == activeEvent?.id) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                    Text(
-                                        text = ExportUtils.formatDateOnly(ev.eventDateMillis),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = ev.title,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.CalendarMonth,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(12.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "${ExportUtils.formatDateOnly(ev.eventDateMillis)} • ${ExportUtils.formatCurrency(ev.budget)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (isActive) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showEventSelector = false }) {
-                        Text("Fechar")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showEventSelector = false
-                        onNavigateToSetup()
-                    }) {
-                        Text("Novo Evento")
-                    }
-                }
-            )
-        }
 
-        // JPG Export Preview Dialog
-        previewBitmap?.let { bitmap ->
-            Dialog(onDismissRequest = { previewBitmap = null }) {
-                Card(shape = RoundedCornerShape(20.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Prévia da Imagem",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "Prévia do resumo do evento",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 420.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
                         Spacer(modifier = Modifier.height(16.dp))
-                        Row(
+
+                        OutlinedButton(
+                            onClick = { showEventSelector = false },
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            shape = RoundedCornerShape(14.dp)
                         ) {
-                            TextButton(onClick = { previewBitmap = null }) {
-                                Text("Cancelar")
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Button(onClick = {
-                                ExportUtils.shareBitmapAsJpg(
-                                    context,
-                                    bitmap.asAndroidBitmap(),
-                                    "Resumo: ${activeEvent?.title ?: ""}"
-                                )
-                                previewBitmap = null
-                            }) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Compartilhar")
-                            }
+                            Text("Fechar")
                         }
                     }
                 }
             }
+        }
+
+        // Centro de Compartilhamento
+        if (showShareCenter && activeEvent != null) {
+            ShareCenterDialog(
+                event = activeEvent,
+                participants = uiState.participants,
+                expenses = uiState.expenses,
+                categories = uiState.categories,
+                summary = uiState.financialSummary,
+                viewModel = viewModel,
+                onDismiss = { showShareCenter = false }
+            )
         }
     }
 }

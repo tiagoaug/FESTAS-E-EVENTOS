@@ -1,10 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ComponentType } from 'react'
 import {
   ChevronDown,
   CalendarCog,
-  ImageDown,
   Send,
   Users,
   ShoppingCart,
@@ -17,9 +16,9 @@ import {
   LogOut,
   Settings as SettingsIcon,
   Share2,
-  X,
 } from 'lucide-react'
 import { useAuth } from '../context/authContextValue'
+import { useSettings } from '../context/settingsContextValue'
 import type { PartyStore } from '../store/usePartyStore'
 import CountdownCard from '../components/CountdownCard'
 import FinancialSummaryCard from '../components/FinancialSummaryCard'
@@ -27,7 +26,6 @@ import BudgetVsSpentChart from '../components/BudgetVsSpentChart'
 import LocationMap from '../components/LocationMap'
 import ShareSummaryDialog from '../components/ShareSummaryDialog'
 import { formatCurrency, formatDateOnly } from '../utils/format'
-import { captureElementAsJpgBlob, shareOrDownloadJpg } from '../utils/exportImage'
 
 function ShortcutCard({
   title,
@@ -60,47 +58,10 @@ function ShortcutCard({
 export default function Dashboard({ store }: { store: PartyStore }) {
   const navigate = useNavigate()
   const { signOutUser } = useAuth()
+  const { useWhatsApp } = useSettings()
   const [showSelector, setShowSelector] = useState(false)
   const [showSharePanel, setShowSharePanel] = useState(false)
-  const [exporting, setExporting] = useState(false)
-  const [sharing, setSharing] = useState(false)
-  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const exportRef = useRef<HTMLDivElement>(null)
   const { activeEvent, events, participants, financialSummary, expenses, categories, selectActiveEvent } = store
-
-  const handlePrepareExport = async () => {
-    if (!exportRef.current || !activeEvent || exporting) return
-    setExporting(true)
-    try {
-      const blob = await captureElementAsJpgBlob(exportRef.current)
-      setPreviewBlob(blob)
-      setPreviewUrl(URL.createObjectURL(blob))
-    } catch {
-      alert('Não foi possível gerar a prévia da imagem agora. Tente novamente.')
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setPreviewBlob(null)
-    setPreviewUrl(null)
-  }
-
-  const handleConfirmExport = async () => {
-    if (!previewBlob || !activeEvent || sharing) return
-    setSharing(true)
-    try {
-      await shareOrDownloadJpg(previewBlob, `${activeEvent.title.replace(/\s+/g, '_')}.jpg`, `Resumo: ${activeEvent.title}`)
-      closePreview()
-    } catch {
-      alert('Não foi possível exportar a imagem agora. Tente novamente.')
-    } finally {
-      setSharing(false)
-    }
-  }
 
   return (
     <>
@@ -120,9 +81,6 @@ export default function Dashboard({ store }: { store: PartyStore }) {
         )}
         <button className="icon-btn" onClick={() => navigate('/event-setup')} title="Configurar Evento">
           <CalendarCog size={19} strokeWidth={2.2} />
-        </button>
-        <button className="icon-btn" onClick={handlePrepareExport} disabled={exporting} title="Exportar JPG">
-          <ImageDown size={19} strokeWidth={2.2} />
         </button>
         <button className="icon-btn" onClick={() => navigate('/settings')} title="Configurações">
           <SettingsIcon size={19} strokeWidth={2.2} />
@@ -144,7 +102,7 @@ export default function Dashboard({ store }: { store: PartyStore }) {
             </button>
           </div>
         ) : (
-          <div className="page" ref={exportRef}>
+          <div className="page">
             <CountdownCard event={activeEvent} />
 
             <div data-export-exclude="true">
@@ -157,28 +115,24 @@ export default function Dashboard({ store }: { store: PartyStore }) {
 
             <div className="card" style={{ background: 'linear-gradient(155deg, rgba(255,255,255,0.7), rgba(255,227,241,0.55))' }}>
               <p className="card-title">Ações Rápidas & Exportação</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={handlePrepareExport} disabled={exporting}>
-                  <ImageDown size={16} strokeWidth={2.3} /> {exporting ? 'Gerando...' : 'Exportar JPG'}
-                </button>
+              {useWhatsApp && (
                 <button
-                  className="btn btn-whatsapp"
-                  style={{ flex: 1 }}
+                  className="btn btn-whatsapp btn-block"
                   onClick={() => navigate('/invitations')}
                 >
                   <Send size={16} strokeWidth={2.3} /> Convites
                 </button>
-              </div>
+              )}
               <button
                 className="btn btn-outline btn-block"
-                style={{ marginTop: 10 }}
+                style={{ marginTop: useWhatsApp ? 10 : 0 }}
                 onClick={() => setShowSharePanel(true)}
               >
                 <Share2 size={16} strokeWidth={2.3} /> Painel de Compartilhamento
               </button>
             </div>
 
-            <FinancialSummaryCard summary={financialSummary} />
+            <FinancialSummaryCard summary={financialSummary} costShareMode={activeEvent.costShareMode} />
 
             <BudgetVsSpentChart budget={activeEvent.budget} expenses={expenses} categories={categories} />
 
@@ -203,22 +157,26 @@ export default function Dashboard({ store }: { store: PartyStore }) {
               />
             </div>
             <div className="grid-2">
-              <ShortcutCard
-                title="Rateio & Receber"
-                subtitle={`Falta ${formatCurrency(financialSummary.missingCollection)}`}
-                icon={Wallet}
-                bg="linear-gradient(155deg, #ffffff, #d6f7e6)"
-                color="#1f9e5c"
-                onClick={() => navigate('/payments')}
-              />
-              <ShortcutCard
-                title="Convites WhatsApp"
-                subtitle="Modelos & Envio"
-                icon={MessageCircle}
-                bg="linear-gradient(155deg, #ffffff, #ffe3f1)"
-                color="#c2277d"
-                onClick={() => navigate('/invitations')}
-              />
+              <div style={{ display: 'flex', gridColumn: useWhatsApp ? undefined : 'span 2' }}>
+                <ShortcutCard
+                  title="Rateio & Receber"
+                  subtitle={`Falta ${formatCurrency(financialSummary.missingCollection)}`}
+                  icon={Wallet}
+                  bg="linear-gradient(155deg, #ffffff, #d6f7e6)"
+                  color="#1f9e5c"
+                  onClick={() => navigate('/payments')}
+                />
+              </div>
+              {useWhatsApp && (
+                <ShortcutCard
+                  title="Convites WhatsApp"
+                  subtitle="Modelos & Envio"
+                  icon={MessageCircle}
+                  bg="linear-gradient(155deg, #ffffff, #ffe3f1)"
+                  color="#c2277d"
+                  onClick={() => navigate('/invitations')}
+                />
+              )}
             </div>
           </div>
         )}
@@ -310,33 +268,13 @@ export default function Dashboard({ store }: { store: PartyStore }) {
         </div>
       )}
 
-      {previewUrl && (
-        <div className="overlay" onClick={closePreview}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <h2>Prévia da Imagem</h2>
-            <img
-              src={previewUrl}
-              alt="Prévia do resumo do evento"
-              style={{ width: '100%', borderRadius: 16, border: '1px solid var(--outline-variant)', display: 'block' }}
-            />
-            <div className="dialog-actions">
-              <button className="btn btn-outline" onClick={closePreview}>
-                <X size={16} strokeWidth={2.3} /> Cancelar
-              </button>
-              <button className="btn btn-primary" onClick={handleConfirmExport} disabled={sharing}>
-                <Share2 size={16} strokeWidth={2.3} /> {sharing ? 'Enviando...' : 'Compartilhar / Salvar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showSharePanel && activeEvent && (
         <ShareSummaryDialog
           event={activeEvent}
           participants={participants}
+          expenses={expenses}
+          categories={categories}
           summary={financialSummary}
-          onExportJpg={handlePrepareExport}
           onClose={() => setShowSharePanel(false)}
         />
       )}

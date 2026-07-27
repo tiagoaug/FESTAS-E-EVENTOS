@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, MessageCircle, Send, CheckCircle2, PartyPopper, MapPin, Navigation } from 'lucide-react'
 import type { PartyStore } from '../store/usePartyStore'
 import { calculateParticipantTarget } from '../store/usePartyStore'
+import { useSettings } from '../context/settingsContextValue'
 import type { ParticipantEntity } from '../types'
 import { formatCurrency, formatDate } from '../utils/format'
 import { openWhatsAppMessage, googleMapsSearchUrl, appleMapsUrl } from '../utils/links'
@@ -12,6 +13,7 @@ const DEFAULT_TEMPLATE =
 
 export default function Invitations({ store }: { store: PartyStore }) {
   const navigate = useNavigate()
+  const { useWhatsApp } = useSettings()
   const { activeEvent, participants, updateEvent } = store
 
   const [templateText, setTemplateText] = useState(activeEvent?.invitationTemplate ?? DEFAULT_TEMPLATE)
@@ -46,6 +48,28 @@ export default function Invitations({ store }: { store: PartyStore }) {
             <PartyPopper size={30} strokeWidth={2} />
           </span>
           <p>Crie um evento primeiro.</p>
+        </div>
+      </>
+    )
+  }
+
+  if (!useWhatsApp) {
+    return (
+      <>
+        <div className="top-bar">
+          <button className="icon-btn" onClick={() => navigate('/')}>
+            <ArrowLeft size={19} strokeWidth={2.3} />
+          </button>
+          <h1>Convites & WhatsApp</h1>
+        </div>
+        <div className="empty-state">
+          <span className="emoji">
+            <MessageCircle size={30} strokeWidth={2} />
+          </span>
+          <p>O WhatsApp está desativado em Configurações.</p>
+          <button className="btn btn-primary" onClick={() => navigate('/settings')}>
+            Abrir Configurações
+          </button>
         </div>
       </>
     )

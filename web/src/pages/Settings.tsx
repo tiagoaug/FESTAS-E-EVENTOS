@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, Palette, Pencil, Plus, Tag, Trash2, Type } from 'lucide-react'
+import { ArrowLeft, Check, MessageCircle, Palette, Pencil, Plus, Tag, Trash2, Type } from 'lucide-react'
 import { FONTS, THEMES, useSettings } from '../context/settingsContextValue'
 import type { PartyStore } from '../store/usePartyStore'
 import { CATEGORY_COLOR_SWATCHES, type CategoryEntity } from '../types'
@@ -8,7 +8,7 @@ import AccordionSection from '../components/AccordionSection'
 
 export default function Settings({ store }: { store: PartyStore }) {
   const navigate = useNavigate()
-  const { theme, setTheme, font, setFont } = useSettings()
+  const { theme, setTheme, font, setFont, useWhatsApp, setUseWhatsApp } = useSettings()
   const { categories, addCategory, updateCategory, deleteCategory } = store
 
   const [showCategoryDialog, setShowCategoryDialog] = useState(false)
@@ -26,6 +26,27 @@ export default function Settings({ store }: { store: PartyStore }) {
 
       <div className="app-content">
         <div className="page">
+          <AccordionSection
+            title="Preferências Gerais"
+            icon={<MessageCircle size={17} strokeWidth={2.3} color="var(--whatsapp)" />}
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+              <input
+                type="checkbox"
+                checked={useWhatsApp}
+                onChange={(e) => setUseWhatsApp(e.target.checked)}
+                style={{ width: 'auto' }}
+              />
+              <span>
+                <strong style={{ display: 'block', fontSize: '0.88rem' }}>Usar WhatsApp</strong>
+                <span style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
+                  Mostra os botões e atalhos de WhatsApp pelo app. Se desmarcado, eles ficam ocultos e o espaço é
+                  reduzido.
+                </span>
+              </span>
+            </label>
+          </AccordionSection>
+
           <AccordionSection title="Tema de Cores" icon={<Palette size={17} strokeWidth={2.3} color="var(--primary)" />}>
             <div
               style={{

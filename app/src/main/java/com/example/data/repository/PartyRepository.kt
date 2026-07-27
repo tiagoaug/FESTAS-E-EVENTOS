@@ -1,8 +1,9 @@
 package com.example.data.repository
 
+import com.example.data.local.entity.CategoryEntity
 import com.example.data.local.entity.CostShareMode
+import com.example.data.local.entity.DEFAULT_CATEGORIES
 import com.example.data.local.entity.EventEntity
-import com.example.data.local.entity.ExpenseCategory
 import com.example.data.local.entity.ExpenseEntity
 import com.example.data.local.entity.ParticipantEntity
 import com.example.data.local.entity.ParticipantType
@@ -34,6 +35,8 @@ private fun documentToEvent(doc: DocumentSnapshot): EventEntity = EventEntity(
     eventType = doc.getString("eventType") ?: "Aniversário",
     eventDateMillis = doc.getLong("eventDateMillis") ?: 0L,
     location = doc.getString("location") ?: "",
+    latitude = doc.getDouble("latitude"),
+    longitude = doc.getDouble("longitude"),
     budget = doc.getDouble("budget") ?: 0.0,
     costShareMode = runCatching { CostShareMode.valueOf(doc.getString("costShareMode") ?: "EQUAL") }
         .getOrDefault(CostShareMode.EQUAL),
@@ -47,6 +50,8 @@ private fun EventEntity.toMap(): Map<String, Any?> = mapOf(
     "eventType" to eventType,
     "eventDateMillis" to eventDateMillis,
     "location" to location,
+    "latitude" to latitude,
+    "longitude" to longitude,
     "budget" to budget,
     "costShareMode" to costShareMode.name,
     "fixedAdultPrice" to fixedAdultPrice,
@@ -64,6 +69,7 @@ private fun documentToParticipant(doc: DocumentSnapshot): ParticipantEntity = Pa
     familyGroup = doc.getString("familyGroup") ?: "Sem Família",
     paidAmount = doc.getDouble("paidAmount") ?: 0.0,
     notes = doc.getString("notes") ?: "",
+    confirmed = doc.getBoolean("confirmed") ?: false,
 )
 
 private fun ParticipantEntity.toMap(): Map<String, Any?> = mapOf(
@@ -74,26 +80,41 @@ private fun ParticipantEntity.toMap(): Map<String, Any?> = mapOf(
     "familyGroup" to familyGroup,
     "paidAmount" to paidAmount,
     "notes" to notes,
+    "confirmed" to confirmed,
 )
 
 private fun documentToExpense(doc: DocumentSnapshot): ExpenseEntity = ExpenseEntity(
     id = doc.id,
     eventId = doc.getString("eventId") ?: "",
     title = doc.getString("title") ?: "",
-    category = runCatching { ExpenseCategory.valueOf(doc.getString("category") ?: "OTHER") }
-        .getOrDefault(ExpenseCategory.OTHER),
+    category = doc.getString("category") ?: "",
     amount = doc.getDouble("amount") ?: 0.0,
     isPurchased = doc.getBoolean("isPurchased") ?: false,
+    isPaid = doc.getBoolean("isPaid") ?: false,
     dateAddedMillis = doc.getLong("dateAddedMillis") ?: System.currentTimeMillis(),
+    notes = doc.getString("notes") ?: "",
 )
 
 private fun ExpenseEntity.toMap(): Map<String, Any?> = mapOf(
     "eventId" to eventId,
     "title" to title,
-    "category" to category.name,
+    "category" to category,
     "amount" to amount,
     "isPurchased" to isPurchased,
+    "isPaid" to isPaid,
     "dateAddedMillis" to dateAddedMillis,
+    "notes" to notes,
+)
+
+private fun documentToCategory(doc: DocumentSnapshot): CategoryEntity = CategoryEntity(
+    id = doc.id,
+    name = doc.getString("name") ?: "",
+    color = doc.getString("color") ?: "#A5AEDB",
+)
+
+private fun CategoryEntity.toMap(): Map<String, Any?> = mapOf(
+    "name" to name,
+    "color" to color,
 )
 
 /**
@@ -105,9 +126,14 @@ class PartyRepository(uid: String) {
     private val eventsCollection = userDoc.collection("events")
     private val participantsCollection = userDoc.collection("participants")
     private val expensesCollection = userDoc.collection("expenses")
+    private val categoriesCollection = userDoc.collection("categories")
+    private val metaCollection = userDoc.collection("meta")
 
     val allEvents: Flow<List<EventEntity>> = eventsCollection.snapshots()
         .map { docs -> docs.map(::documentToEvent).sortedBy { it.eventDateMillis } }
+
+    val allCategories: Flow<List<CategoryEntity>> = categoriesCollection.snapshots()
+        .map { docs -> docs.map(::documentToCategory) }
 
     val activeEventId: Flow<String?> = callbackFlow {
         val registration = userDoc.addSnapshotListener { snapshot, error ->
@@ -127,6 +153,35 @@ class PartyRepository(uid: String) {
     fun getExpenses(eventId: String): Flow<List<ExpenseEntity>> =
         expensesCollection.whereEqualTo("eventId", eventId).snapshots()
             .map { docs -> docs.map(::documentToExpense).sortedByDescending { it.dateAddedMillis } }
+
+    /**
+     * Semeia as categorias padrão uma única vez por usuário, usando um documento
+     * sentinela + transação para ser seguro mesmo com múltiplas chamadas concorrentes.
+     */
+    suspend fun seedDefaultCategoriesIfEmpty() {
+        val sentinelRef = metaCollection.document("categoriesSeeded")
+        db.runTransaction { tx ->
+            val sentinel = tx.get(sentinelRef)
+            if (!sentinel.exists()) {
+                tx.set(sentinelRef, mapOf("seededAt" to System.currentTimeMillis()))
+                DEFAULT_CATEGORIES.forEach { category ->
+                    tx.set(categoriesCollection.document(), category.toMap())
+                }
+            }
+        }.await()
+    }
+
+    suspend fun insertCategory(category: CategoryEntity) {
+        categoriesCollection.add(category.toMap()).await()
+    }
+
+    suspend fun updateCategory(category: CategoryEntity) {
+        categoriesCollection.document(category.id).set(category.toMap()).await()
+    }
+
+    suspend fun deleteCategory(category: CategoryEntity) {
+        categoriesCollection.document(category.id).delete().await()
+    }
 
     suspend fun createInitialSampleEventIfEmpty() {
         val existing = allEvents.firstOrNull()
@@ -156,11 +211,11 @@ class PartyRepository(uid: String) {
             participants.forEach { participantsCollection.add(it.toMap()).await() }
 
             val expenses = listOf(
-                ExpenseEntity(eventId = eventRef.id, title = "Aluguel do Espaço", category = ExpenseCategory.VENUE, amount = 1000.0, isPurchased = true),
-                ExpenseEntity(eventId = eventRef.id, title = "Salgados & Doces", category = ExpenseCategory.FOOD, amount = 450.0, isPurchased = true),
-                ExpenseEntity(eventId = eventRef.id, title = "Carne & Churrasco", category = ExpenseCategory.FOOD, amount = 600.0, isPurchased = false),
-                ExpenseEntity(eventId = eventRef.id, title = "Refrigerantes & Sucos", category = ExpenseCategory.DRINK, amount = 200.0, isPurchased = false),
-                ExpenseEntity(eventId = eventRef.id, title = "Decoração com Balões", category = ExpenseCategory.DECORATION, amount = 250.0, isPurchased = true),
+                ExpenseEntity(eventId = eventRef.id, title = "Aluguel do Espaço", amount = 1000.0, isPurchased = true, isPaid = true),
+                ExpenseEntity(eventId = eventRef.id, title = "Salgados & Doces", amount = 450.0, isPurchased = true, isPaid = false),
+                ExpenseEntity(eventId = eventRef.id, title = "Carne & Churrasco", amount = 600.0, isPurchased = false),
+                ExpenseEntity(eventId = eventRef.id, title = "Refrigerantes & Sucos", amount = 200.0, isPurchased = false),
+                ExpenseEntity(eventId = eventRef.id, title = "Decoração com Balões", amount = 250.0, isPurchased = true, isPaid = true),
             )
             expenses.forEach { expensesCollection.add(it.toMap()).await() }
         }
@@ -208,6 +263,10 @@ class PartyRepository(uid: String) {
         participantsCollection.document(participantId).update("paidAmount", paidAmount).await()
     }
 
+    suspend fun updateParticipantConfirmed(participantId: String, confirmed: Boolean) {
+        participantsCollection.document(participantId).update("confirmed", confirmed).await()
+    }
+
     suspend fun deleteParticipant(participant: ParticipantEntity) {
         participantsCollection.document(participant.id).delete().await()
     }
@@ -222,6 +281,10 @@ class PartyRepository(uid: String) {
 
     suspend fun updateExpensePurchased(expenseId: String, isPurchased: Boolean) {
         expensesCollection.document(expenseId).update("isPurchased", isPurchased).await()
+    }
+
+    suspend fun updateExpensePaid(expenseId: String, isPaid: Boolean) {
+        expensesCollection.document(expenseId).update("isPaid", isPaid).await()
     }
 
     suspend fun deleteExpense(expense: ExpenseEntity) {

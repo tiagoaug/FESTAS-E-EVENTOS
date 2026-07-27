@@ -1,6 +1,6 @@
 import { Wallet, TrendingDown, TrendingUp, CreditCard } from 'lucide-react'
 import type { ComponentType } from 'react'
-import type { FinancialSummary } from '../types'
+import type { CostShareMode, FinancialSummary } from '../types'
 import { formatCurrency } from '../utils/format'
 
 function MetricTile({
@@ -29,7 +29,14 @@ function MetricTile({
   )
 }
 
-export default function FinancialSummaryCard({ summary }: { summary: FinancialSummary }) {
+export default function FinancialSummaryCard({
+  summary,
+  costShareMode,
+}: {
+  summary: FinancialSummary
+  costShareMode: CostShareMode
+}) {
+  const isOrganizerOnly = costShareMode === 'ORGANIZER_ONLY'
   const spentPct =
     summary.budget > 0 ? Math.min(1, Math.max(0, summary.totalSpent / summary.budget)) : 0
   const collectionPct =
@@ -60,20 +67,24 @@ export default function FinancialSummaryCard({ summary }: { summary: FinancialSu
         />
       </div>
       <div className="grid-2">
-        <MetricTile
-          title="Arrecadado"
-          amount={summary.totalCollected}
-          icon={TrendingUp}
-          iconBg="linear-gradient(155deg, #ffffff, #d6f7e6)"
-          iconColor="#1f9e5c"
-        />
-        <MetricTile
-          title="Saldo Atual"
-          amount={summary.netBalance}
-          icon={CreditCard}
-          iconBg={balanceBg}
-          iconColor={balanceColor}
-        />
+        {!isOrganizerOnly && (
+          <MetricTile
+            title="Arrecadado"
+            amount={summary.totalCollected}
+            icon={TrendingUp}
+            iconBg="linear-gradient(155deg, #ffffff, #d6f7e6)"
+            iconColor="#1f9e5c"
+          />
+        )}
+        <div style={isOrganizerOnly ? { gridColumn: 'span 2' } : undefined}>
+          <MetricTile
+            title="Saldo Atual"
+            amount={summary.netBalance}
+            icon={CreditCard}
+            iconBg={balanceBg}
+            iconColor={balanceColor}
+          />
+        </div>
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -98,21 +109,37 @@ export default function FinancialSummaryCard({ summary }: { summary: FinancialSu
         </div>
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-          <span style={{ color: 'var(--on-surface-variant)', fontWeight: 600 }}>Progresso da Arrecadação</span>
-          <strong style={{ color: '#1f9e5c' }}>
-            {Math.round(collectionPct * 100)}% ({formatCurrency(summary.totalCollected)} /{' '}
-            {formatCurrency(summary.totalExpectedCollection)})
-          </strong>
+      {!isOrganizerOnly && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+            <span style={{ color: 'var(--on-surface-variant)', fontWeight: 600 }}>Progresso da Arrecadação</span>
+            <strong style={{ color: '#1f9e5c' }}>
+              {Math.round(collectionPct * 100)}% ({formatCurrency(summary.totalCollected)} /{' '}
+              {formatCurrency(summary.totalExpectedCollection)})
+            </strong>
+          </div>
+          <div className="progress-track" style={{ marginTop: 6 }}>
+            <div
+              className="progress-fill"
+              style={{ width: `${collectionPct * 100}%`, background: 'linear-gradient(90deg, #6ee7a3, #1f9e5c)' }}
+            />
+          </div>
         </div>
-        <div className="progress-track" style={{ marginTop: 6 }}>
-          <div
-            className="progress-fill"
-            style={{ width: `${collectionPct * 100}%`, background: 'linear-gradient(90deg, #6ee7a3, #1f9e5c)' }}
-          />
-        </div>
-      </div>
+      )}
+
+      {isOrganizerOnly && (
+        <p
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--on-surface-variant)',
+            marginTop: 12,
+            marginBottom: 0,
+            textAlign: 'center',
+          }}
+        >
+          O organizador assume o custo total — não há rateio a arrecadar dos convidados.
+        </p>
+      )}
     </div>
   )
 }

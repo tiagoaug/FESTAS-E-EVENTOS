@@ -13,6 +13,8 @@ data class EventEntity(
     val eventType: String = "Aniversário",
     val eventDateMillis: Long = 0L,
     val location: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val budget: Double = 0.0,
     val costShareMode: CostShareMode = CostShareMode.EQUAL,
     val fixedAdultPrice: Double = 0.0,

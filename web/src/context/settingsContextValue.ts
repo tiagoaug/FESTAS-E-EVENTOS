@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-export type ThemeId = 'violeta' | 'oceano' | 'esmeralda' | 'coral'
+export type ThemeId = 'violeta' | 'oceano' | 'esmeralda' | 'coral' | 'claro'
 export type FontId =
   | 'system'
   | 'roboto-flex'
@@ -24,6 +24,7 @@ export const THEMES: ThemeOption[] = [
   { id: 'oceano', label: 'Oceano', swatch: '#3b82f6' },
   { id: 'esmeralda', label: 'Esmeralda', swatch: '#10b981' },
   { id: 'coral', label: 'Coral', swatch: '#fb7185' },
+  { id: 'claro', label: 'Claro', swatch: '#b8bec7' },
 ]
 
 export interface FontOption {
@@ -50,6 +51,8 @@ export interface SettingsContextValue {
   setTheme: (theme: ThemeId) => void
   font: FontId
   setFont: (font: FontId) => void
+  useWhatsApp: boolean
+  setUseWhatsApp: (value: boolean) => void
 }
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null)

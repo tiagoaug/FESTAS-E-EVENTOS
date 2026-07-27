@@ -6,12 +6,14 @@ import {
   SearchX,
   MessageCircle,
   CheckCircle2,
+  Circle,
   Pencil,
   Trash2,
   User,
   Baby,
   PartyPopper,
   Plus,
+  Calculator,
 } from 'lucide-react'
 import type { PartyStore } from '../store/usePartyStore'
 import { calculateDefineLaterSuggestion, calculateParticipantTarget } from '../store/usePartyStore'
@@ -19,10 +21,22 @@ import type { ParticipantEntity, ParticipantType } from '../types'
 import { formatCurrency } from '../utils/format'
 import { openWhatsAppMessage } from '../utils/links'
 import { formatDate } from '../utils/format'
+import MiniCalculator from '../components/MiniCalculator'
+import { useSettings } from '../context/settingsContextValue'
 
 export default function Participants({ store }: { store: PartyStore }) {
   const navigate = useNavigate()
-  const { activeEvent, participants, financialSummary, addParticipant, updateParticipant, updateParticipantPayment, deleteParticipant } = store
+  const { useWhatsApp } = useSettings()
+  const {
+    activeEvent,
+    participants,
+    financialSummary,
+    addParticipant,
+    updateParticipant,
+    updateParticipantPayment,
+    toggleParticipantConfirmed,
+    deleteParticipant,
+  } = store
 
   const [search, setSearch] = useState('')
   const [familyFilter, setFamilyFilter] = useState('TODAS')
@@ -182,47 +196,79 @@ export default function Participants({ store }: { store: PartyStore }) {
                       <p style={{ margin: '2px 0', fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
                         {p.type === 'ADULT' ? 'Adulto' : 'Criança'} • Rateio: {formatCurrency(target)}
                       </p>
-                      <span
-                        className={`badge ${isPaidFull ? 'badge-success' : isPartial ? 'badge-warning' : 'badge-danger'}`}
-                      >
-                        {isPaidFull
-                          ? `PAGO: ${formatCurrency(p.paidAmount)}`
-                          : isPartial
-                            ? `PARCIAL: ${formatCurrency(p.paidAmount)} / ${formatCurrency(target)}`
-                            : 'PENDENTE: R$ 0,00'}
-                      </span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <span
+                          className={`badge ${isPaidFull ? 'badge-success' : isPartial ? 'badge-warning' : 'badge-danger'}`}
+                        >
+                          {isPaidFull
+                            ? `PAGO: ${formatCurrency(p.paidAmount)}`
+                            : isPartial
+                              ? `PARCIAL: ${formatCurrency(p.paidAmount)} / ${formatCurrency(target)}`
+                              : 'PENDENTE: R$ 0,00'}
+                        </span>
+                        <button
+                          type="button"
+                          className={`badge ${p.confirmed ? 'badge-success' : 'badge-warning'}`}
+                          style={{ border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          title="Clique para alternar confirmação de presença"
+                          onClick={() => toggleParticipantConfirmed(p.id, !p.confirmed)}
+                        >
+                          {p.confirmed ? (
+                            <CheckCircle2 size={12} strokeWidth={2.4} />
+                          ) : (
+                            <Circle size={12} strokeWidth={2.4} />
+                          )}
+                          {p.confirmed ? 'PRESENÇA CONFIRMADA' : 'AGUARDANDO CONFIRMAÇÃO'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 10, justifyContent: 'flex-end' }}>
+                  <div className="action-capsule">
+                    {useWhatsApp && (
+                      <button
+                        type="button"
+                        className="action-pill-btn"
+                        title="Enviar WhatsApp"
+                        onClick={() => {
+                          const message = (activeEvent.invitationTemplate || '')
+                            .replace('{nome}', p.name)
+                            .replace('{evento}', activeEvent.title)
+                            .replace('{data}', formatDate(activeEvent.eventDateMillis))
+                            .replace('{local}', activeEvent.location)
+                            .replace('{valor}', formatCurrency(target))
+                          openWhatsAppMessage(p.phone, message)
+                        }}
+                      >
+                        <MessageCircle size={18} strokeWidth={2.2} color="var(--whatsapp)" />
+                        <span>WhatsApp</span>
+                      </button>
+                    )}
                     <button
-                      className="icon-btn"
-                      title="Enviar WhatsApp"
-                      onClick={() => {
-                        const message = (activeEvent.invitationTemplate || '')
-                          .replace('{nome}', p.name)
-                          .replace('{evento}', activeEvent.title)
-                          .replace('{data}', formatDate(activeEvent.eventDateMillis))
-                          .replace('{local}', activeEvent.location)
-                          .replace('{valor}', formatCurrency(target))
-                        openWhatsAppMessage(p.phone, message)
-                      }}
-                      style={{ color: 'var(--whatsapp)' }}
+                      type="button"
+                      className="action-pill-btn"
+                      title="Dar baixa no pagamento"
+                      onClick={() => setPaymentTarget(p)}
                     >
-                      <MessageCircle size={17} strokeWidth={2.2} />
-                    </button>
-                    <button className="icon-btn" title="Dar baixa" style={{ color: 'var(--success)' }} onClick={() => setPaymentTarget(p)}>
-                      <CheckCircle2 size={17} strokeWidth={2.2} />
-                    </button>
-                    <button className="icon-btn" title="Editar" onClick={() => setEditing(p)}>
-                      <Pencil size={16} strokeWidth={2.2} />
+                      <CheckCircle2 size={18} strokeWidth={2.2} color="var(--success)" />
+                      <span>Receber</span>
                     </button>
                     <button
-                      className="icon-btn"
-                      title="Excluir"
-                      style={{ color: 'var(--danger)' }}
+                      type="button"
+                      className="action-pill-btn"
+                      title="Editar convidado"
+                      onClick={() => setEditing(p)}
+                    >
+                      <Pencil size={17} strokeWidth={2.2} color="var(--primary)" />
+                      <span>Editar</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="action-pill-btn"
+                      title="Excluir convidado"
                       onClick={() => deleteParticipant(p)}
                     >
-                      <Trash2 size={16} strokeWidth={2.2} />
+                      <Trash2 size={17} strokeWidth={2.2} color="var(--danger)" />
+                      <span>Excluir</span>
                     </button>
                   </div>
                 </div>
@@ -240,7 +286,7 @@ export default function Participants({ store }: { store: PartyStore }) {
         <AddParticipantDialog
           onClose={() => setShowAdd(false)}
           onSaveSingle={(data) => {
-            addParticipant({ ...data, eventId: activeEvent.id, paidAmount: 0 })
+            addParticipant({ ...data, eventId: activeEvent.id, paidAmount: 0, confirmed: false })
             setShowAdd(false)
           }}
           onSaveFamily={(familyName, members) => {
@@ -251,6 +297,7 @@ export default function Participants({ store }: { store: PartyStore }) {
                 type: member.type,
                 familyGroup: familyName,
                 notes: '',
+                confirmed: false,
                 eventId: activeEvent.id,
                 paidAmount: 0,
               })
@@ -552,37 +599,104 @@ function PaymentDialog({
   onConfirm: (amount: number) => void
 }) {
   const [amountText, setAmountText] = useState(participant.paidAmount.toString())
+  const [partialText, setPartialText] = useState('')
+  const [calcTarget, setCalcTarget] = useState<'total' | 'partial' | null>(null)
+
+  const addPartial = () => {
+    const partial = parseFloat(partialText.replace(',', '.')) || 0
+    if (partial <= 0) return
+    const current = parseFloat(amountText.replace(',', '.')) || 0
+    setAmountText((current + partial).toString())
+    setPartialText('')
+  }
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h2>Dar Baixa no Pagamento</h2>
-        <p>Participante: {participant.name}</p>
-        <p>Meta Individual: {formatCurrency(target)}</p>
-        <div className="field">
-          <label className="field-label">Valor Pago (R$)</label>
-          <input type="number" value={amountText} onChange={(e) => setAmountText(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setAmountText(target.toString())}>
-            Quitar Total
-          </button>
-          <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setAmountText('0')}>
-            Zerar
-          </button>
-        </div>
-        <div className="dialog-actions">
-          <button className="btn btn-outline" onClick={onClose}>
-            Cancelar
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => onConfirm(parseFloat(amountText.replace(',', '.')) || 0)}
-          >
-            Confirmar Baixa
-          </button>
+    <>
+      <div className="overlay" onClick={onClose}>
+        <div className="dialog" onClick={(e) => e.stopPropagation()}>
+          <h2>Dar Baixa no Pagamento</h2>
+          <p>Participante: {participant.name}</p>
+          <p>Meta Individual: {formatCurrency(target)}</p>
+
+          <div className="field">
+            <label className="field-label">Valor Total Recebido (R$)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="number"
+                value={amountText}
+                onChange={(e) => setAmountText(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="icon-btn"
+                title="Abrir calculadora"
+                onClick={() => setCalcTarget('total')}
+              >
+                <Calculator size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setAmountText(target.toString())}>
+              Quitar Total
+            </button>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setAmountText('0')}>
+              Zerar
+            </button>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Receber Parcial Agora (R$)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="number"
+                value={partialText}
+                onChange={(e) => setPartialText(e.target.value)}
+                placeholder="Ex: 50,00"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="icon-btn"
+                title="Abrir calculadora"
+                onClick={() => setCalcTarget('partial')}
+              >
+                <Calculator size={18} strokeWidth={2.2} />
+              </button>
+              <button type="button" className="btn btn-outline" onClick={addPartial}>
+                Adicionar
+              </button>
+            </div>
+            <p style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', margin: '4px 0 0' }}>
+              Soma ao valor total recebido acima, sem substituir o que já foi pago.
+            </p>
+          </div>
+
+          <div className="dialog-actions">
+            <button className="btn btn-outline" onClick={onClose}>
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => onConfirm(parseFloat(amountText.replace(',', '.')) || 0)}
+            >
+              Confirmar Baixa
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {calcTarget && (
+        <MiniCalculator
+          onClose={() => setCalcTarget(null)}
+          onUse={(value) => {
+            if (calcTarget === 'total') setAmountText(value.toString())
+            else setPartialText(value.toString())
+          }}
+        />
+      )}
+    </>
   )
 }

@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,18 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entity.ParticipantEntity
 import com.example.data.local.entity.ParticipantType
 import com.example.ui.components.ExportUtils
+import com.example.ui.components.PaymentDialog
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ParticipantsScreen(
     uiState: PartyUiState,
@@ -33,9 +38,11 @@ fun ParticipantsScreen(
 ) {
     val context = LocalContext.current
     val activeEvent = uiState.activeEvent
+    val useWhatsApp by viewModel.useWhatsApp.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFamilyFilter by remember { mutableStateOf("TODAS") }
+    var familyFilterExpanded by remember { mutableStateOf(false) }
 
     var showAddParticipantDialog by remember { mutableStateOf(false) }
     var editingParticipant by remember { mutableStateOf<ParticipantEntity?>(null) }
@@ -71,13 +78,11 @@ fun ParticipantsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            com.example.ui.components.GradientFab(
                 onClick = { showAddParticipantDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "Adicionar Convidado")
-            }
+                icon = Icons.Default.PersonAdd,
+                contentDescription = "Adicionar Convidado"
+            )
         }
     ) { innerPadding ->
         Column(
@@ -135,20 +140,61 @@ fun ParticipantsScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // Family Group Filter Chips
-            if (familiesList.size > 2) {
-                ScrollableTabRow(
-                    selectedTabIndex = familiesList.indexOf(selectedFamilyFilter).coerceAtLeast(0),
-                    edgePadding = 0.dp,
-                    divider = {}
+            // Family Group Filter Chips (em acordeão, pra não ocupar espaço fixo na tela)
+            if (familiesList.size > 1) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                 ) {
-                    familiesList.forEach { family ->
-                        FilterChip(
-                            selected = (selectedFamilyFilter == family),
-                            onClick = { selectedFamilyFilter = family },
-                            label = { Text(family) },
-                            modifier = Modifier.padding(end = 6.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { familyFilterExpanded = !familyFilterExpanded }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Filtrar por Família: $selectedFamilyFilter",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = if (familyFilterExpanded) "Recolher" else "Expandir",
+                            modifier = Modifier.rotate(if (familyFilterExpanded) 180f else 0f)
+                        )
+                    }
+
+                    AnimatedVisibility(visible = familyFilterExpanded) {
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            familiesList.forEach { family ->
+                                FilterChip(
+                                    selected = (selectedFamilyFilter == family),
+                                    onClick = {
+                                        selectedFamilyFilter = family
+                                        familyFilterExpanded = false
+                                    },
+                                    label = { Text(family) }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -189,8 +235,10 @@ fun ParticipantsScreen(
                         ParticipantItemCard(
                             participant = participant,
                             targetContribution = targetContribution,
+                            showWhatsApp = useWhatsApp,
                             onEditClick = { editingParticipant = participant },
                             onPaymentClick = { paymentDialogParticipant = participant },
+                            onToggleConfirmed = { viewModel.toggleParticipantConfirmed(participant.id, it) },
                             onWhatsAppClick = {
                                 val eventName = activeEvent?.title ?: "Festa"
                                 val eventDate = ExportUtils.formatDate(activeEvent?.eventDateMillis ?: 0L)
@@ -314,68 +362,28 @@ fun ParticipantsScreen(
         // Give Payment Dialog ("Dar Baixa em Pagamento")
         paymentDialogParticipant?.let { participant ->
             val target = if (activeEvent != null) viewModel.calculateParticipantTarget(participant, activeEvent, uiState.participants) else 0.0
-            var amountText by remember { mutableStateOf(participant.paidAmount.toString()) }
-
-            AlertDialog(
-                onDismissRequest = { paymentDialogParticipant = null },
-                title = { Text("Dar Baixa no Pagamento") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Participante: ${participant.name}")
-                        Text("Meta Individual: ${ExportUtils.formatCurrency(target)}")
-
-                        OutlinedTextField(
-                            value = amountText,
-                            onValueChange = { amountText = it },
-                            label = { Text("Valor Pago (R$)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = { amountText = target.toString() },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Quitar Total")
-                            }
-                            OutlinedButton(
-                                onClick = { amountText = "0.0" },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Zerar")
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val paid = amountText.toDoubleOrNull() ?: 0.0
-                            viewModel.updateParticipantPayment(participant.id, paid)
-                            paymentDialogParticipant = null
-                        }
-                    ) {
-                        Text("Confirmar Baixa")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { paymentDialogParticipant = null }) {
-                        Text("Cancelar")
-                    }
+            PaymentDialog(
+                participant = participant,
+                target = target,
+                onDismiss = { paymentDialogParticipant = null },
+                onConfirm = { paid ->
+                    viewModel.updateParticipantPayment(participant.id, paid)
+                    paymentDialogParticipant = null
                 }
             )
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ParticipantItemCard(
     participant: ParticipantEntity,
     targetContribution: Double,
+    showWhatsApp: Boolean,
     onEditClick: () -> Unit,
     onPaymentClick: () -> Unit,
+    onToggleConfirmed: (Boolean) -> Unit,
     onWhatsAppClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -388,112 +396,187 @@ private fun ParticipantItemCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icon Badge
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (participant.type == ParticipantType.ADULT) MaterialTheme.colorScheme.primaryContainer else Color(0xFFFFF3E0)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (participant.type == ParticipantType.ADULT) Icons.Default.Person else Icons.Default.ChildCare,
-                    contentDescription = null,
-                    tint = if (participant.type == ParticipantType.ADULT) MaterialTheme.colorScheme.primary else Color(0xFFE65100)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = participant.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                // Icon Badge
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (participant.type == ParticipantType.ADULT) MaterialTheme.colorScheme.primaryContainer else Color(0xFFFFF3E0)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (participant.type == ParticipantType.ADULT) Icons.Default.Person else Icons.Default.ChildCare,
+                        contentDescription = null,
+                        tint = if (participant.type == ParticipantType.ADULT) MaterialTheme.colorScheme.primary else Color(0xFFE65100)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = participant.familyGroup,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Text(
-                    text = "${participant.type.label} • Rateio: ${ExportUtils.formatCurrency(targetContribution)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = when {
-                            isPaidFull -> Color(0xFFE8F5E9)
-                            isPartial -> Color(0xFFFFF8E1)
-                            else -> Color(0xFFFFEBEE)
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = participant.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = participant.familyGroup,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Text(
+                        text = "${participant.type.label} • Rateio: ${ExportUtils.formatCurrency(targetContribution)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = when {
-                                isPaidFull -> "PAGO: ${ExportUtils.formatCurrency(participant.paidAmount)}"
-                                isPartial -> "PARCIAL: ${ExportUtils.formatCurrency(participant.paidAmount)} / ${ExportUtils.formatCurrency(targetContribution)}"
-                                else -> "PENDENTE: R$ 0,00"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
                             color = when {
-                                isPaidFull -> Color(0xFF2E7D32)
-                                isPartial -> Color(0xFFF57F17)
-                                else -> Color(0xFFC62828)
-                            },
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                                isPaidFull -> Color(0xFFE8F5E9)
+                                isPartial -> Color(0xFFFFF8E1)
+                                else -> Color(0xFFFFEBEE)
+                            }
+                        ) {
+                            Text(
+                                text = when {
+                                    isPaidFull -> "PAGO: ${ExportUtils.formatCurrency(participant.paidAmount)}"
+                                    isPartial -> "PARCIAL: ${ExportUtils.formatCurrency(participant.paidAmount)} / ${ExportUtils.formatCurrency(targetContribution)}"
+                                    else -> "PENDENTE: R$ 0,00"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    isPaidFull -> Color(0xFF2E7D32)
+                                    isPartial -> Color(0xFFF57F17)
+                                    else -> Color(0xFFC62828)
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (participant.confirmed) Color(0xFFE8F5E9) else Color(0xFFFFF8E1),
+                            modifier = Modifier.clickable { onToggleConfirmed(!participant.confirmed) }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (participant.confirmed) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (participant.confirmed) Color(0xFF2E7D32) else Color(0xFFF57F17),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (participant.confirmed) "PRESENÇA CONFIRMADA" else "AGUARDANDO CONFIRMAÇÃO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (participant.confirmed) Color(0xFF2E7D32) else Color(0xFFF57F17)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            Row {
-                IconButton(onClick = onWhatsAppClick) {
-                    Icon(
-                        imageVector = Icons.Default.Chat,
-                        contentDescription = "Enviar WhatsApp",
-                        tint = Color(0xFF25D366)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Action capsule: botões em pílula com ícone + legenda, mirando o estilo web.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (showWhatsApp) {
+                    ActionPillButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Chat,
+                        label = "WhatsApp",
+                        tint = Color(0xFF25D366),
+                        onClick = onWhatsAppClick
                     )
                 }
-
-                IconButton(onClick = onPaymentClick) {
-                    Icon(
-                        imageVector = Icons.Default.PriceCheck,
-                        contentDescription = "Dar Baixa",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                IconButton(onClick = onEditClick) {
-                    Icon(Icons.Default.Edit, contentDescription = "Editar", modifier = Modifier.size(18.dp))
-                }
-
-                IconButton(onClick = onDeleteClick) {
-                    Icon(Icons.Default.Delete, contentDescription = "Excluir", tint = Color(0xFFD32F2F), modifier = Modifier.size(18.dp))
-                }
+                ActionPillButton(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.CheckCircle,
+                    label = "Receber",
+                    tint = Color(0xFF2E7D32),
+                    onClick = onPaymentClick
+                )
+                ActionPillButton(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Edit,
+                    label = "Editar",
+                    tint = MaterialTheme.colorScheme.primary,
+                    onClick = onEditClick
+                )
+                ActionPillButton(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Delete,
+                    label = "Excluir",
+                    tint = Color(0xFFD32F2F),
+                    onClick = onDeleteClick
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun ActionPillButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.clip(RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = tint,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

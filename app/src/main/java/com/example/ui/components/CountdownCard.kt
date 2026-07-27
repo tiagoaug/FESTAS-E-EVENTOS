@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,12 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
 import com.example.data.local.entity.EventEntity
 import kotlinx.coroutines.delay
 
@@ -58,26 +54,16 @@ fun CountdownCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.verticalGradient(
+                    Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF2A124D),
-                            Color(0xFF432275),
-                            Color(0xFF6C4AB6)
+                            Color(0xFF9D7BF0),
+                            Color(0xFFA978D8),
+                            Color(0xFF7C6CE0),
+                            Color(0xFF6C8EF0)
                         )
                     )
                 )
         ) {
-            // Optional hero background image overlay with low opacity
-            Image(
-                painter = painterResource(id = R.drawable.img_party_hero_1785155844636),
-                contentDescription = null,
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(24.dp)),
-                contentScale = ContentScale.Crop,
-                alpha = 0.25f
-            )
-
             Column(
                 modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally

@@ -40,3 +40,16 @@ val EmeraldSuccess = Color(0xFF2ECC71)
 val EmeraldSuccessContainer = Color(0xFFE8F5E9)
 val CoralWarning = Color(0xFFFF6B6B)
 
+// Theme presets (Configurações > Tema de Cores), mirroring the web app's 4 themes.
+val PrimaryOceano = Color(0xFF3B82F6)
+val PrimaryOceanoContainer = Color(0xFFD3E3FD)
+val OnPrimaryOceanoContainer = Color(0xFF001B3F)
+
+val PrimaryEsmeralda = Color(0xFF10B981)
+val PrimaryEsmeraldaContainer = Color(0xFFC8F5DF)
+val OnPrimaryEsmeraldaContainer = Color(0xFF00210F)
+
+val PrimaryCoral = Color(0xFFFB7185)
+val PrimaryCoralContainer = Color(0xFFFFD9DE)
+val OnPrimaryCoralContainer = Color(0xFF3F0512)
+

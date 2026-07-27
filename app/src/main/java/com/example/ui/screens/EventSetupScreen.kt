@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +25,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.local.entity.CostShareMode
 import com.example.data.local.entity.EventEntity
+import com.example.ui.components.EventLocationCard
 import com.example.ui.components.ExportUtils
+import com.example.ui.components.MiniCalculator
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,6 +48,8 @@ fun EventSetupScreen(
     var title by remember(activeEvent) { mutableStateOf(activeEvent?.title ?: "") }
     var eventType by remember(activeEvent) { mutableStateOf(activeEvent?.eventType ?: "Aniversário") }
     var location by remember(activeEvent) { mutableStateOf(activeEvent?.location ?: "") }
+    var latitude by remember(activeEvent) { mutableStateOf(activeEvent?.latitude) }
+    var longitude by remember(activeEvent) { mutableStateOf(activeEvent?.longitude) }
     var budgetText by remember(activeEvent) { mutableStateOf(activeEvent?.budget?.toString() ?: "") }
     var eventDateMillis by remember(activeEvent) { mutableStateOf(activeEvent?.eventDateMillis ?: (System.currentTimeMillis() + 7 * 24 * 3600 * 1000L)) }
 
@@ -54,6 +60,7 @@ fun EventSetupScreen(
     val eventTypesList = listOf("Aniversário", "Casamento", "Chá de Bebê / Panela", "Formatura", "Churrasco", "Outro")
 
     var showDeleteConfirmDialog by remember { mutableStateOf<EventEntity?>(null) }
+    var showBudgetCalculator by remember { mutableStateOf(false) }
 
     val calendar = Calendar.getInstance().apply { timeInMillis = eventDateMillis }
 
@@ -99,6 +106,7 @@ fun EventSetupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .nestedScroll(rememberNestedScrollInteropConnection())
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -165,21 +173,16 @@ fun EventSetupScreen(
                     }
 
                     OutlinedTextField(
-                        value = location,
-                        onValueChange = { location = it },
-                        label = { Text("Local do Evento") },
-                        placeholder = { Text("Ex: Salão de Festas, Chácara Recanto") },
-                        leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
                         value = budgetText,
                         onValueChange = { budgetText = it },
                         label = { Text("Orçamento Total (R$)") },
                         placeholder = { Text("Ex: 2500.00") },
                         leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { showBudgetCalculator = true }) {
+                                Icon(Icons.Default.Calculate, contentDescription = "Abrir calculadora")
+                            }
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -392,6 +395,8 @@ fun EventSetupScreen(
                                 title = title.ifBlank { "Minha Festa" },
                                 eventType = eventType,
                                 location = location,
+                                latitude = latitude,
+                                longitude = longitude,
                                 budget = parsedBudget,
                                 eventDateMillis = eventDateMillis,
                                 costShareMode = costShareMode,
@@ -429,6 +434,17 @@ fun EventSetupScreen(
                     }
                 }
             }
+
+            EventLocationCard(
+                location = location,
+                onLocationChange = { location = it },
+                latitude = latitude,
+                longitude = longitude,
+                onCoordsChange = { lat, lng ->
+                    latitude = lat
+                    longitude = lng
+                }
+            )
 
             // List of Existing Events to Switch/Delete
             if (uiState.events.isNotEmpty()) {
@@ -504,6 +520,13 @@ fun EventSetupScreen(
                         Text("Cancelar")
                     }
                 }
+            )
+        }
+
+        if (showBudgetCalculator) {
+            MiniCalculator(
+                onDismiss = { showBudgetCalculator = false },
+                onUseResult = { value -> budgetText = value.toString() }
             )
         }
     }

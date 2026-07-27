@@ -242,6 +242,13 @@ export function usePartyStore(uid: string) {
     [uid],
   )
 
+  const toggleParticipantConfirmed = useCallback(
+    async (participantId: string, confirmed: boolean) => {
+      await updateDoc(doc(db, 'users', uid, 'participants', participantId), { confirmed })
+    },
+    [uid],
+  )
+
   const deleteParticipant = useCallback(
     async (participant: ParticipantEntity) => {
       await deleteDoc(doc(db, 'users', uid, 'participants', participant.id))
@@ -321,6 +328,7 @@ export function usePartyStore(uid: string) {
     addParticipant,
     updateParticipant,
     updateParticipantPayment,
+    toggleParticipantConfirmed,
     deleteParticipant,
     addExpense,
     updateExpense,

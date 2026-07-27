@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.local.entity.ParticipantEntity
 import com.example.ui.components.ExportUtils
+import com.example.ui.components.PaymentDialog
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
 
@@ -68,25 +69,6 @@ fun PaymentsScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        if (activeEvent != null) {
-                            ExportUtils.exportFinancialSummaryPdf(
-                                context = context,
-                                event = activeEvent,
-                                summary = summary,
-                                participants = uiState.participants,
-                                expenses = uiState.expenses
-                            )
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.PictureAsPdf,
-                            contentDescription = "Exportar Relatório PDF",
-                            tint = Color(0xFFD32F2F)
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -166,27 +148,6 @@ fun PaymentsScreen(
                 }
             }
 
-            // Export PDF Button Banner
-            OutlinedButton(
-                onClick = {
-                    if (activeEvent != null) {
-                        ExportUtils.exportFinancialSummaryPdf(
-                            context = context,
-                            event = activeEvent,
-                            summary = summary,
-                            participants = uiState.participants,
-                            expenses = uiState.expenses
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = Color(0xFFD32F2F))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Exportar Relatório em PDF", fontWeight = FontWeight.Bold)
-            }
-
             // Search Bar
             OutlinedTextField(
                 value = searchQuery,
@@ -256,56 +217,13 @@ fun PaymentsScreen(
         // Dialog for Payment Update
         paymentDialogParticipant?.let { participant ->
             val target = if (activeEvent != null) viewModel.calculateParticipantTarget(participant, activeEvent, uiState.participants) else 0.0
-            var amountText by remember { mutableStateOf(participant.paidAmount.toString()) }
-
-            AlertDialog(
-                onDismissRequest = { paymentDialogParticipant = null },
-                title = { Text("Dar Baixa em Recebimento") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Participante: ${participant.name}")
-                        Text("Meta Calculada: ${ExportUtils.formatCurrency(target)}")
-
-                        OutlinedTextField(
-                            value = amountText,
-                            onValueChange = { amountText = it },
-                            label = { Text("Valor Recebido / Pago (R$)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = { amountText = target.toString() },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Quitar Total")
-                            }
-                            OutlinedButton(
-                                onClick = { amountText = "0.0" },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Zerar")
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val paid = amountText.toDoubleOrNull() ?: 0.0
-                            viewModel.updateParticipantPayment(participant.id, paid)
-                            paymentDialogParticipant = null
-                        }
-                    ) {
-                        Text("Confirmar")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { paymentDialogParticipant = null }) {
-                        Text("Cancelar")
-                    }
+            PaymentDialog(
+                participant = participant,
+                target = target,
+                onDismiss = { paymentDialogParticipant = null },
+                onConfirm = { paid ->
+                    viewModel.updateParticipantPayment(participant.id, paid)
+                    paymentDialogParticipant = null
                 }
             )
         }

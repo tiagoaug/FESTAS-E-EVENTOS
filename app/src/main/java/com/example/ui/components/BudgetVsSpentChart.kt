@@ -12,22 +12,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.data.local.entity.ExpenseCategory
+import com.example.data.local.entity.CategoryEntity
 import com.example.data.local.entity.ExpenseEntity
+import com.example.data.local.entity.FALLBACK_CATEGORY_COLOR
+import com.example.data.local.entity.FALLBACK_CATEGORY_LABEL
 
 @Composable
 fun BudgetVsSpentChart(
     budget: Double,
     expenses: List<ExpenseEntity>,
+    categories: List<CategoryEntity>,
     modifier: Modifier = Modifier
 ) {
     val totalSpent = expenses.sumOf { it.amount }
     val remainingBudget = maxOf(0.0, budget - totalSpent)
+    val totalPaid = expenses.filter { it.isPaid }.sumOf { it.amount }
+    val totalToPay = expenses.filter { !it.isPaid }.sumOf { it.amount }
 
     // Group expenses by category
-    val expensesByCategory = ExpenseCategory.entries.map { cat ->
-        val catTotal = expenses.filter { it.category == cat }.sumOf { it.amount }
-        cat to catTotal
+    val categoryIds = expenses.map { it.category }.distinct()
+    val expensesByCategory = categoryIds.map { categoryId ->
+        val category = categories.find { it.id == categoryId }
+            ?: CategoryEntity(id = categoryId, name = FALLBACK_CATEGORY_LABEL, color = FALLBACK_CATEGORY_COLOR)
+        val catTotal = expenses.filter { it.category == categoryId }.sumOf { it.amount }
+        category to catTotal
     }.filter { it.second > 0 }
 
     Card(
@@ -108,6 +116,40 @@ fun BudgetVsSpentChart(
                 }
             }
 
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Valores Pagos",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = ExportUtils.formatCurrency(totalPaid),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Valores a Pagar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = ExportUtils.formatCurrency(totalToPay),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFC62828)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
@@ -129,7 +171,7 @@ fun BudgetVsSpentChart(
             } else {
                 expensesByCategory.forEach { (cat, catSpent) ->
                     val percentage = if (totalSpent > 0) (catSpent / totalSpent).toFloat() else 0f
-                    val catColor = getCategoryColor(cat)
+                    val catColor = colorFromHex(cat.color)
 
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Row(
@@ -146,7 +188,7 @@ fun BudgetVsSpentChart(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = cat.label,
+                                    text = cat.name,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -176,13 +218,5 @@ fun BudgetVsSpentChart(
     }
 }
 
-fun getCategoryColor(category: ExpenseCategory): Color {
-    return when (category) {
-        ExpenseCategory.FOOD -> Color(0xFFFF6B6B)
-        ExpenseCategory.DRINK -> Color(0xFF4ECDC4)
-        ExpenseCategory.DECORATION -> Color(0xFFFFB100)
-        ExpenseCategory.VENUE -> Color(0xFF6C4AB6)
-        ExpenseCategory.ENTERTAINMENT -> Color(0xFFFF8E8E)
-        ExpenseCategory.OTHER -> Color(0xFF95A5A6)
-    }
-}
+fun colorFromHex(hex: String): Color =
+    runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(Color(0xFFA5AEDB))

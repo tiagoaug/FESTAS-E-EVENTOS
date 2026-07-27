@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Save, CalendarPlus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Calculator, Save, CalendarPlus, Trash2 } from 'lucide-react'
 import type { PartyStore } from '../store/usePartyStore'
 import { EVENT_TYPES, type CostShareMode, type EventEntity, DEFINE_LATER_CHILD_WEIGHT } from '../types'
 import { formatCurrency, formatDateOnly } from '../utils/format'
 import { googleCalendarUrl } from '../utils/links'
 import EventLocationCard from '../components/EventLocationCard'
+import MiniCalculator from '../components/MiniCalculator'
 
 function toDateInputValue(millis: number) {
   const d = new Date(millis)
@@ -49,6 +50,7 @@ export default function EventSetup({ store }: { store: PartyStore }) {
     editingEvent?.fixedChildPrice?.toString() ?? '20.0',
   )
   const [deleteTarget, setDeleteTarget] = useState<EventEntity | null>(null)
+  const [showBudgetCalculator, setShowBudgetCalculator] = useState(false)
   const [latitude, setLatitude] = useState<number | undefined>(editingEvent?.latitude)
   const [longitude, setLongitude] = useState<number | undefined>(editingEvent?.longitude)
 
@@ -135,13 +137,31 @@ export default function EventSetup({ store }: { store: PartyStore }) {
 
             <div className="field">
               <label className="field-label">Orçamento Total (R$)</label>
-              <input
-                type="number"
-                value={budgetText}
-                onChange={(e) => setBudgetText(e.target.value)}
-                placeholder="Ex: 2500.00"
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="number"
+                  value={budgetText}
+                  onChange={(e) => setBudgetText(e.target.value)}
+                  placeholder="Ex: 2500.00"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Abrir calculadora"
+                  onClick={() => setShowBudgetCalculator(true)}
+                >
+                  <Calculator size={18} strokeWidth={2.2} />
+                </button>
+              </div>
             </div>
+
+            {showBudgetCalculator && (
+              <MiniCalculator
+                onClose={() => setShowBudgetCalculator(false)}
+                onUse={(value) => setBudgetText(value.toString())}
+              />
+            )}
 
             <label className="field-label">Data e Hora</label>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>

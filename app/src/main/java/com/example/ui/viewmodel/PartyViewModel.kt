@@ -1,8 +1,10 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.entity.CategoryEntity
 import com.example.data.local.entity.CostShareMode
 import com.example.data.local.entity.EventEntity
 import com.example.data.local.entity.ExpenseEntity
@@ -10,14 +12,23 @@ import com.example.data.local.entity.ParticipantEntity
 import com.example.data.local.entity.ParticipantType
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.PartyRepository
+import com.example.ui.theme.AppFontId
+import com.example.ui.theme.AppThemeId
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+private const val SETTINGS_PREFS_NAME = "festas_eventos_settings"
+private const val KEY_USE_WHATSAPP = "use_whatsapp"
+private const val KEY_APP_THEME = "app_theme"
+private const val KEY_APP_FONT = "app_font"
 
 /** Crianças pagam esta fração do valor do adulto no modo CostShareMode.DEFINE_LATER. */
 const val DEFINE_LATER_CHILD_WEIGHT = 0.5
@@ -41,6 +52,7 @@ data class PartyUiState(
     val activeEvent: EventEntity? = null,
     val participants: List<ParticipantEntity> = emptyList(),
     val expenses: List<ExpenseEntity> = emptyList(),
+    val categories: List<CategoryEntity> = emptyList(),
     val financialSummary: FinancialSummary = FinancialSummary(),
     val isLoading: Boolean = true
 )
@@ -48,6 +60,38 @@ data class PartyUiState(
 class PartyViewModel(application: Application) : AndroidViewModel(application) {
 
     private val authRepository = AuthRepository(application)
+
+    private val settingsPrefs = application.getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _useWhatsApp = MutableStateFlow(settingsPrefs.getBoolean(KEY_USE_WHATSAPP, true))
+    val useWhatsApp: StateFlow<Boolean> = _useWhatsApp.asStateFlow()
+
+    fun setUseWhatsApp(enabled: Boolean) {
+        _useWhatsApp.value = enabled
+        settingsPrefs.edit().putBoolean(KEY_USE_WHATSAPP, enabled).apply()
+    }
+
+    private val _appTheme = MutableStateFlow(
+        runCatching { AppThemeId.valueOf(settingsPrefs.getString(KEY_APP_THEME, null) ?: "") }
+            .getOrDefault(AppThemeId.VIOLETA)
+    )
+    val appTheme: StateFlow<AppThemeId> = _appTheme.asStateFlow()
+
+    fun setAppTheme(theme: AppThemeId) {
+        _appTheme.value = theme
+        settingsPrefs.edit().putString(KEY_APP_THEME, theme.name).apply()
+    }
+
+    private val _appFont = MutableStateFlow(
+        runCatching { AppFontId.valueOf(settingsPrefs.getString(KEY_APP_FONT, null) ?: "") }
+            .getOrDefault(AppFontId.SYSTEM)
+    )
+    val appFont: StateFlow<AppFontId> = _appFont.asStateFlow()
+
+    fun setAppFont(font: AppFontId) {
+        _appFont.value = font
+        settingsPrefs.edit().putString(KEY_APP_FONT, font.name).apply()
+    }
 
     /** Repository for the currently signed-in user, or null when signed out. */
     private val repository: PartyRepository?
@@ -69,12 +113,17 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 val userRepository = PartyRepository(user.uid)
                 viewModelScope.launch { userRepository.createInitialSampleEventIfEmpty() }
+                viewModelScope.launch { userRepository.seedDefaultCategoriesIfEmpty() }
 
-                combine(userRepository.allEvents, userRepository.activeEventId) { events, activeId ->
-                    Pair(events, events.find { it.id == activeId })
-                }.flatMapLatest { (events, active) ->
+                combine(
+                    userRepository.allEvents,
+                    userRepository.activeEventId,
+                    userRepository.allCategories
+                ) { events, activeId, categories ->
+                    Triple(events, events.find { it.id == activeId }, categories)
+                }.flatMapLatest { (events, active, categories) ->
                     if (active == null) {
-                        flowOf(PartyUiState(events = events, isLoading = false))
+                        flowOf(PartyUiState(events = events, categories = categories, isLoading = false))
                     } else {
                         combine(
                             userRepository.getParticipants(active.id),
@@ -86,6 +135,7 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
                                 activeEvent = active,
                                 participants = participants,
                                 expenses = expenses,
+                                categories = categories,
                                 financialSummary = summary,
                                 isLoading = false
                             )
@@ -206,6 +256,10 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
         repository?.updatePayment(participantId, paidAmount)
     }
 
+    fun toggleParticipantConfirmed(participantId: String, confirmed: Boolean) = viewModelScope.launch {
+        repository?.updateParticipantConfirmed(participantId, confirmed)
+    }
+
     fun deleteParticipant(participant: ParticipantEntity) = viewModelScope.launch {
         repository?.deleteParticipant(participant)
     }
@@ -223,7 +277,24 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
         repository?.updateExpensePurchased(expenseId, isPurchased)
     }
 
+    fun toggleExpensePaid(expenseId: String, isPaid: Boolean) = viewModelScope.launch {
+        repository?.updateExpensePaid(expenseId, isPaid)
+    }
+
     fun deleteExpense(expense: ExpenseEntity) = viewModelScope.launch {
         repository?.deleteExpense(expense)
+    }
+
+    // Category Actions
+    fun addCategory(category: CategoryEntity) = viewModelScope.launch {
+        repository?.insertCategory(category)
+    }
+
+    fun updateCategory(category: CategoryEntity) = viewModelScope.launch {
+        repository?.updateCategory(category)
+    }
+
+    fun deleteCategory(category: CategoryEntity) = viewModelScope.launch {
+        repository?.deleteCategory(category)
     }
 }

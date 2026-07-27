@@ -44,6 +44,8 @@ export interface ParticipantEntity {
   familyGroup: string
   paidAmount: number
   notes: string
+  /** Confirmação de presença no evento. */
+  confirmed: boolean
 }
 
 export interface CategoryEntity {
