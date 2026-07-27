@@ -1,0 +1,6 @@
+{
+  "name": "Festas & Eventos",
+  "description": "Aplicativo completo para organização de festas e eventos com controle de orçamento, rateio de custos, gastos, lista de convidados e convites via WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

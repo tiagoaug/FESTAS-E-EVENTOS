@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "902643175428",
+    "project_id": "festas-e-eventos-app",
+    "storage_bucket": "festas-e-eventos-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:902643175428:android:4d2825b6d9111190dee551",
+        "android_client_info": {
+          "package_name": "com.antigravit.festaseventos"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "902643175428-2sjv5fok0j5brl8hgriofbmkcepu11s5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.antigravit.festaseventos",
+            "certificate_hash": "25fcf1dae29d867dc7f67fa7291354451a2ee78b"
+          }
+        },
+        {
+          "client_id": "902643175428-f4dsrdepo3feeh8834ebptu3npkkhfmo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLtOUs5ztrhfLri4218Ve_E6AWoBDRt34"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "902643175428-f4dsrdepo3feeh8834ebptu3npkkhfmo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
