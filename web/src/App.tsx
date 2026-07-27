@@ -1,6 +1,7 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { useAuth } from './context/authContextValue'
+import { SettingsProvider } from './context/SettingsContext'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import { usePartyStore } from './store/usePartyStore'
@@ -10,6 +11,7 @@ import Participants from './pages/Participants'
 import Expenses from './pages/Expenses'
 import Payments from './pages/Payments'
 import Invitations from './pages/Invitations'
+import Settings from './pages/Settings'
 
 function AuthenticatedApp({ uid }: { uid: string }) {
   const store = usePartyStore(uid)
@@ -23,6 +25,7 @@ function AuthenticatedApp({ uid }: { uid: string }) {
         <Route path="/expenses" element={<Expenses store={store} />} />
         <Route path="/payments" element={<Payments store={store} />} />
         <Route path="/invitations" element={<Invitations store={store} />} />
+        <Route path="/settings" element={<Settings store={store} />} />
       </Routes>
       <BottomNav />
     </>
@@ -49,11 +52,13 @@ function AppShell() {
 
 function App() {
   return (
-    <AuthProvider>
-      <HashRouter>
-        <AppShell />
-      </HashRouter>
-    </AuthProvider>
+    <SettingsProvider>
+      <AuthProvider>
+        <HashRouter>
+          <AppShell />
+        </HashRouter>
+      </AuthProvider>
+    </SettingsProvider>
   )
 }
 

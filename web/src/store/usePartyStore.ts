@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  runTransaction,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore'
 import { db } from '../firebase'
 import type {
+  CategoryEntity,
   EventEntity,
   ExpenseEntity,
   FinancialSummary,
   ParticipantEntity,
 } from '../types'
-import { DEFINE_LATER_CHILD_WEIGHT } from '../types'
+import { DEFAULT_CATEGORIES, DEFINE_LATER_CHILD_WEIGHT } from '../types'
 
 export function calculateParticipantTarget(
   participant: ParticipantEntity,
@@ -100,6 +110,7 @@ export function usePartyStore(uid: string) {
   const [events, setEvents] = useState<EventEntity[]>([])
   const [allParticipants, setAllParticipants] = useState<ParticipantEntity[]>([])
   const [allExpenses, setAllExpenses] = useState<ExpenseEntity[]>([])
+  const [categories, setCategories] = useState<CategoryEntity[]>([])
   const [activeEventId, setActiveEventId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -112,6 +123,9 @@ export function usePartyStore(uid: string) {
     const unsubExpenses = onSnapshot(collection(db, 'users', uid, 'expenses'), (snap) => {
       setAllExpenses(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ExpenseEntity, 'id'>) })))
     })
+    const unsubCategories = onSnapshot(collection(db, 'users', uid, 'categories'), (snap) => {
+      setCategories(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CategoryEntity, 'id'>) })))
+    })
     const unsubUser = onSnapshot(doc(db, 'users', uid), (snap) => {
       const data = snap.data() as { activeEventId?: string } | undefined
       setActiveEventId(data?.activeEventId ?? null)
@@ -121,8 +135,27 @@ export function usePartyStore(uid: string) {
       unsubEvents()
       unsubParticipants()
       unsubExpenses()
+      unsubCategories()
       unsubUser()
     }
+  }, [uid])
+
+  useEffect(() => {
+    // Uses a sentinel doc + transaction so this is safe even if this effect fires more than
+    // once (e.g. React StrictMode double-invoking effects, or multiple tabs open at once) —
+    // only the first caller to see the sentinel missing gets to seed the defaults.
+    const seedSentinelRef = doc(db, 'users', uid, 'meta', 'categoriesSeeded')
+    runTransaction(db, async (tx) => {
+      const sentinel = await tx.get(seedSentinelRef)
+      if (sentinel.exists()) return
+      tx.set(seedSentinelRef, { seededAt: Date.now() })
+      for (const category of DEFAULT_CATEGORIES) {
+        const newCategoryRef = doc(collection(db, 'users', uid, 'categories'))
+        tx.set(newCategoryRef, category)
+      }
+    }).catch(() => {
+      // Best-effort seeding; if it fails the user can still add categories manually.
+    })
   }, [uid])
 
   const activeEvent = useMemo(
@@ -238,9 +271,38 @@ export function usePartyStore(uid: string) {
     [uid],
   )
 
+  const toggleExpensePaid = useCallback(
+    async (expenseId: string, isPaid: boolean) => {
+      await updateDoc(doc(db, 'users', uid, 'expenses', expenseId), { isPaid })
+    },
+    [uid],
+  )
+
   const deleteExpense = useCallback(
     async (expense: ExpenseEntity) => {
       await deleteDoc(doc(db, 'users', uid, 'expenses', expense.id))
+    },
+    [uid],
+  )
+
+  const addCategory = useCallback(
+    async (category: Omit<CategoryEntity, 'id'>) => {
+      await addDoc(collection(db, 'users', uid, 'categories'), category)
+    },
+    [uid],
+  )
+
+  const updateCategory = useCallback(
+    async (category: CategoryEntity) => {
+      const { id, ...rest } = category
+      await updateDoc(doc(db, 'users', uid, 'categories', id), rest)
+    },
+    [uid],
+  )
+
+  const deleteCategory = useCallback(
+    async (category: CategoryEntity) => {
+      await deleteDoc(doc(db, 'users', uid, 'categories', category.id))
     },
     [uid],
   )
@@ -250,6 +312,7 @@ export function usePartyStore(uid: string) {
     activeEvent,
     participants,
     expenses,
+    categories,
     financialSummary,
     addEvent,
     updateEvent,
@@ -262,7 +325,11 @@ export function usePartyStore(uid: string) {
     addExpense,
     updateExpense,
     toggleExpensePurchased,
+    toggleExpensePaid,
     deleteExpense,
+    addCategory,
+    updateCategory,
+    deleteCategory,
   }
 }
 

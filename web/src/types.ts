@@ -46,49 +46,53 @@ export interface ParticipantEntity {
   notes: string
 }
 
-export type ExpenseCategory =
-  | 'FOOD'
-  | 'DRINK'
-  | 'DECORATION'
-  | 'VENUE'
-  | 'ENTERTAINMENT'
-  | 'OTHER'
-
-export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
-  FOOD: 'Comida & Salgados',
-  DRINK: 'Bebidas',
-  DECORATION: 'Decoração',
-  VENUE: 'Aluguel do Local',
-  ENTERTAINMENT: 'Som & Animação',
-  OTHER: 'Outros',
+export interface CategoryEntity {
+  id: string
+  name: string
+  color: string
 }
 
-export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  'FOOD',
-  'DRINK',
-  'DECORATION',
-  'VENUE',
-  'ENTERTAINMENT',
-  'OTHER',
+/** Seeded once per user the first time their category list is empty. */
+export const DEFAULT_CATEGORIES: Omit<CategoryEntity, 'id'>[] = [
+  { name: 'Comida & Salgados', color: '#FF8A80' },
+  { name: 'Bebidas', color: '#4FD1C5' },
+  { name: 'Decoração', color: '#FFC94D' },
+  { name: 'Aluguel do Local', color: '#9B7EE8' },
+  { name: 'Som & Animação', color: '#FF9AC6' },
+  { name: 'Outros', color: '#A5AEDB' },
 ]
 
-export const EXPENSE_CATEGORY_COLOR: Record<ExpenseCategory, string> = {
-  FOOD: '#FF8A80',
-  DRINK: '#4FD1C5',
-  DECORATION: '#FFC94D',
-  VENUE: '#9B7EE8',
-  ENTERTAINMENT: '#FF9AC6',
-  OTHER: '#A5AEDB',
-}
+/** Curated swatches offered when creating/editing a category. */
+export const CATEGORY_COLOR_SWATCHES = [
+  '#FF8A80',
+  '#4FD1C5',
+  '#FFC94D',
+  '#9B7EE8',
+  '#FF9AC6',
+  '#A5AEDB',
+  '#60A5FA',
+  '#34D399',
+  '#FBBF24',
+  '#F472B6',
+  '#A78BFA',
+  '#F87171',
+]
+
+export const FALLBACK_CATEGORY_COLOR = '#A5AEDB'
+export const FALLBACK_CATEGORY_LABEL = 'Sem categoria'
 
 export interface ExpenseEntity {
   id: string
   eventId: string
   title: string
-  category: ExpenseCategory
+  category: string
   amount: number
+  /** Status de compra: o item já foi comprado? */
   isPurchased: boolean
+  /** Status de pagamento: o item já foi pago ao fornecedor? Independente de isPurchased. */
+  isPaid: boolean
   dateAddedMillis: number
+  notes: string
 }
 
 export interface FinancialSummary {

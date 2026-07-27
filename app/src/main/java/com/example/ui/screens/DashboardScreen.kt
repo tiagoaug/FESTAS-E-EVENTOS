@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.view.View
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,13 +11,17 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.data.local.entity.EventEntity
 import com.example.ui.components.BudgetVsSpentChart
@@ -29,8 +30,11 @@ import com.example.ui.components.ExportUtils
 import com.example.ui.components.FinancialSummaryCard
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
+import dev.shreyaspatil.capturable.capturable
+import dev.shreyaspatil.capturable.controller.rememberCaptureController
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun DashboardScreen(
     uiState: PartyUiState,
@@ -42,7 +46,9 @@ fun DashboardScreen(
     onNavigateToInvitations: () -> Unit
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
+    val coroutineScope = rememberCoroutineScope()
+    val captureController = rememberCaptureController()
+    var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var showEventSelector by remember { mutableStateOf(false) }
 
     val activeEvent = uiState.activeEvent
@@ -128,7 +134,8 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .capturable(captureController),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 1. Countdown Hero Card
@@ -158,7 +165,17 @@ fun DashboardScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    captureAndShareJpg(view, context, activeEvent.title)
+                                    coroutineScope.launch {
+                                        try {
+                                            previewBitmap = captureController.captureAsync().await()
+                                        } catch (error: Throwable) {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Erro ao capturar tela: ${error.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
                                 },
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -298,6 +315,52 @@ fun DashboardScreen(
                 }
             )
         }
+
+        // JPG Export Preview Dialog
+        previewBitmap?.let { bitmap ->
+            Dialog(onDismissRequest = { previewBitmap = null }) {
+                Card(shape = RoundedCornerShape(20.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Prévia da Imagem",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Prévia do resumo do evento",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 420.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { previewBitmap = null }) {
+                                Text("Cancelar")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(onClick = {
+                                ExportUtils.shareBitmapAsJpg(
+                                    context,
+                                    bitmap.asAndroidBitmap(),
+                                    "Resumo: ${activeEvent?.title ?: ""}"
+                                )
+                                previewBitmap = null
+                            }) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Compartilhar")
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -345,16 +408,5 @@ private fun ShortcutCard(
                 )
             }
         }
-    }
-}
-
-private fun captureAndShareJpg(view: View, context: android.content.Context, eventTitle: String) {
-    try {
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        view.draw(canvas)
-        ExportUtils.shareBitmapAsJpg(context, bitmap, "Resumo: $eventTitle")
-    } catch (e: Exception) {
-        android.widget.Toast.makeText(context, "Erro ao capturar tela: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
     }
 }

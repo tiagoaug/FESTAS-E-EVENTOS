@@ -123,8 +123,8 @@ export default function Participants({ store }: { store: PartyStore }) {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {families.length > 2 && (
-            <div className="chip-row">
+          {families.length > 1 && (
+            <div className="chip-row" style={{ flexWrap: 'wrap' }}>
               {families.map((f) => (
                 <button
                   key={f}
@@ -236,20 +236,36 @@ export default function Participants({ store }: { store: PartyStore }) {
         <Plus size={24} strokeWidth={2.6} />
       </button>
 
-      {(showAdd || editing) && (
-        <ParticipantDialog
-          participant={editing}
-          onClose={() => {
+      {showAdd && (
+        <AddParticipantDialog
+          onClose={() => setShowAdd(false)}
+          onSaveSingle={(data) => {
+            addParticipant({ ...data, eventId: activeEvent.id, paidAmount: 0 })
             setShowAdd(false)
-            setEditing(null)
           }}
-          onSave={(data) => {
-            if (editing) {
-              updateParticipant({ ...editing, ...data })
-            } else {
-              addParticipant({ ...data, eventId: activeEvent.id, paidAmount: 0 })
-            }
+          onSaveFamily={(familyName, members) => {
+            members.forEach((member) => {
+              addParticipant({
+                name: member.name,
+                phone: member.phone,
+                type: member.type,
+                familyGroup: familyName,
+                notes: '',
+                eventId: activeEvent.id,
+                paidAmount: 0,
+              })
+            })
             setShowAdd(false)
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditParticipantDialog
+          participant={editing}
+          onClose={() => setEditing(null)}
+          onSave={(data) => {
+            updateParticipant({ ...editing, ...data })
             setEditing(null)
           }}
         />
@@ -270,24 +286,24 @@ export default function Participants({ store }: { store: PartyStore }) {
   )
 }
 
-function ParticipantDialog({
+function EditParticipantDialog({
   participant,
   onClose,
   onSave,
 }: {
-  participant: ParticipantEntity | null
+  participant: ParticipantEntity
   onClose: () => void
   onSave: (data: { name: string; phone: string; familyGroup: string; type: ParticipantType; notes: string }) => void
 }) {
-  const [name, setName] = useState(participant?.name ?? '')
-  const [phone, setPhone] = useState(participant?.phone ?? '')
-  const [familyGroup, setFamilyGroup] = useState(participant?.familyGroup ?? 'Família Silva')
-  const [type, setType] = useState<ParticipantType>(participant?.type ?? 'ADULT')
+  const [name, setName] = useState(participant.name)
+  const [phone, setPhone] = useState(participant.phone)
+  const [familyGroup, setFamilyGroup] = useState(participant.familyGroup)
+  const [type, setType] = useState<ParticipantType>(participant.type)
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h2>{participant ? 'Editar Convidado' : 'Novo Convidado'}</h2>
+        <h2>Editar Convidado</h2>
         <div className="field">
           <label className="field-label">Nome do Participante</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
@@ -332,7 +348,7 @@ function ParticipantDialog({
                   phone,
                   familyGroup: familyGroup.trim() || 'Sem Família',
                   type,
-                  notes: participant?.notes ?? '',
+                  notes: participant.notes,
                 })
               }
             }}
@@ -340,6 +356,185 @@ function ParticipantDialog({
             Salvar
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+type AddMode = 'AVULSO' | 'FAMILIA'
+
+interface FamilyMemberDraft {
+  name: string
+  phone: string
+  type: ParticipantType
+}
+
+function emptyMember(): FamilyMemberDraft {
+  return { name: '', phone: '', type: 'ADULT' }
+}
+
+function AddParticipantDialog({
+  onClose,
+  onSaveSingle,
+  onSaveFamily,
+}: {
+  onClose: () => void
+  onSaveSingle: (data: { name: string; phone: string; familyGroup: string; type: ParticipantType; notes: string }) => void
+  onSaveFamily: (familyName: string, members: FamilyMemberDraft[]) => void
+}) {
+  const [mode, setMode] = useState<AddMode>('AVULSO')
+
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [type, setType] = useState<ParticipantType>('ADULT')
+
+  const [familyName, setFamilyName] = useState('')
+  const [members, setMembers] = useState<FamilyMemberDraft[]>([emptyMember()])
+
+  const updateMember = (index: number, patch: Partial<FamilyMemberDraft>) => {
+    setMembers((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)))
+  }
+  const addMemberRow = () => setMembers((prev) => [...prev, emptyMember()])
+  const removeMemberRow = (index: number) => setMembers((prev) => prev.filter((_, i) => i !== index))
+
+  const validMemberCount = members.filter((m) => m.name.trim()).length
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <h2>Novo Convidado</h2>
+
+        <div className="chip-row" style={{ marginBottom: 14 }}>
+          <button
+            className={`chip ${mode === 'AVULSO' ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setMode('AVULSO')}
+          >
+            Convidado Avulso
+          </button>
+          <button
+            className={`chip ${mode === 'FAMILIA' ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setMode('FAMILIA')}
+          >
+            Família
+          </button>
+        </div>
+
+        {mode === 'AVULSO' ? (
+          <>
+            <div className="field">
+              <label className="field-label">Nome do Participante</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="field">
+              <label className="field-label">Telefone / WhatsApp (DDD+Número)</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Ex: 11999998888"
+              />
+            </div>
+            <label className="field-label">Classificação</label>
+            <div className="chip-row">
+              <button className={`chip ${type === 'ADULT' ? 'selected' : ''}`} onClick={() => setType('ADULT')}>
+                Adulto
+              </button>
+              <button className={`chip ${type === 'CHILD' ? 'selected' : ''}`} onClick={() => setType('CHILD')}>
+                Criança
+              </button>
+            </div>
+            <div className="dialog-actions">
+              <button className="btn btn-outline" onClick={onClose}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (name.trim()) {
+                    onSaveSingle({ name: name.trim(), phone, familyGroup: 'Sem Família', type, notes: '' })
+                  }
+                }}
+              >
+                Salvar
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="field">
+              <label className="field-label">Nome da Família</label>
+              <input
+                type="text"
+                value={familyName}
+                onChange={(e) => setFamilyName(e.target.value)}
+                placeholder="Ex: Família Silva"
+              />
+            </div>
+
+            <label className="field-label">Integrantes</label>
+            {members.map((member, index) => (
+              <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="text"
+                  value={member.name}
+                  onChange={(e) => updateMember(index, { name: e.target.value })}
+                  placeholder={`Nome ${index + 1}`}
+                  style={{ flex: 2 }}
+                />
+                <input
+                  type="tel"
+                  value={member.phone}
+                  onChange={(e) => updateMember(index, { phone: e.target.value })}
+                  placeholder="Telefone"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className={`chip ${member.type === 'ADULT' ? 'selected' : ''}`}
+                  title={member.type === 'ADULT' ? 'Adulto (toque para marcar Criança)' : 'Criança (toque para marcar Adulto)'}
+                  onClick={() => updateMember(index, { type: member.type === 'ADULT' ? 'CHILD' : 'ADULT' })}
+                  style={{ flexShrink: 0, fontSize: '0.7rem', padding: '8px 10px' }}
+                >
+                  {member.type === 'ADULT' ? 'Ad.' : 'Cri.'}
+                </button>
+                {members.length > 1 && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    style={{ color: 'var(--danger)', flexShrink: 0 }}
+                    onClick={() => removeMemberRow(index)}
+                  >
+                    <Trash2 size={15} strokeWidth={2.2} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button className="btn btn-outline btn-block" onClick={addMemberRow} style={{ marginBottom: 14 }}>
+              <Plus size={15} strokeWidth={2.3} /> Adicionar Integrante
+            </button>
+
+            <div className="dialog-actions">
+              <button className="btn btn-outline" onClick={onClose}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const validMembers = members
+                    .filter((m) => m.name.trim())
+                    .map((m) => ({ ...m, name: m.name.trim() }))
+                  if (familyName.trim() && validMembers.length > 0) {
+                    onSaveFamily(familyName.trim(), validMembers)
+                  }
+                }}
+              >
+                Salvar Família ({validMemberCount})
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

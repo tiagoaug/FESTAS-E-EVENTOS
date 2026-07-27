@@ -1,29 +1,64 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, PackagePlus, ShoppingBag, Pencil, Trash2, PartyPopper, Plus } from 'lucide-react'
+import {
+  ArrowLeft,
+  Calendar,
+  Check,
+  ChevronRight,
+  ListFilter,
+  PackagePlus,
+  ShoppingBag,
+  Pencil,
+  Save,
+  Trash2,
+  PartyPopper,
+  Plus,
+} from 'lucide-react'
 import type { PartyStore } from '../store/usePartyStore'
 import {
-  EXPENSE_CATEGORIES,
-  EXPENSE_CATEGORY_COLOR,
-  EXPENSE_CATEGORY_LABEL,
-  type ExpenseCategory,
+  FALLBACK_CATEGORY_COLOR,
+  FALLBACK_CATEGORY_LABEL,
+  type CategoryEntity,
   type ExpenseEntity,
 } from '../types'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatDate } from '../utils/format'
 import BudgetVsSpentChart from '../components/BudgetVsSpentChart'
+import AccordionSection from '../components/AccordionSection'
+
+function findCategory(categories: CategoryEntity[], categoryId: string): CategoryEntity {
+  return (
+    categories.find((c) => c.id === categoryId) ?? {
+      id: categoryId,
+      name: FALLBACK_CATEGORY_LABEL,
+      color: FALLBACK_CATEGORY_COLOR,
+    }
+  )
+}
 
 export default function Expenses({ store }: { store: PartyStore }) {
   const navigate = useNavigate()
-  const { activeEvent, expenses, addExpense, updateExpense, toggleExpensePurchased, deleteExpense } = store
+  const {
+    activeEvent,
+    expenses,
+    categories,
+    addExpense,
+    updateExpense,
+    toggleExpensePurchased,
+    toggleExpensePaid,
+    deleteExpense,
+  } = store
 
-  const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<ExpenseEntity | null>(null)
+  const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null)
 
   const filtered = useMemo(
     () => (categoryFilter ? expenses.filter((e) => e.category === categoryFilter) : expenses),
     [expenses, categoryFilter],
   )
+
+  const detailExpense = expenses.find((e) => e.id === detailExpenseId) ?? null
 
   if (!activeEvent) {
     return (
@@ -51,85 +86,91 @@ export default function Expenses({ store }: { store: PartyStore }) {
           <ArrowLeft size={19} strokeWidth={2.3} />
         </button>
         <h1 style={{ flex: 1 }}>Controle de Gastos</h1>
-        <button className="icon-btn" onClick={() => setShowAdd(true)}>
+        <button className="icon-btn" onClick={() => setShowAdd(true)} disabled={categories.length === 0}>
           <PackagePlus size={19} strokeWidth={2.2} />
         </button>
       </div>
 
       <div className="app-content">
         <div className="page">
-          <BudgetVsSpentChart budget={activeEvent.budget} expenses={expenses} />
+          <BudgetVsSpentChart budget={activeEvent.budget} expenses={expenses} categories={categories} />
 
-          <div className="chip-row">
-            <button className={`chip ${categoryFilter === null ? 'selected' : ''}`} onClick={() => setCategoryFilter(null)}>
-              Todas
-            </button>
-            {EXPENSE_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                className={`chip ${categoryFilter === cat ? 'selected' : ''}`}
-                onClick={() => setCategoryFilter(cat)}
-              >
-                {EXPENSE_CATEGORY_LABEL[cat]}
-              </button>
-            ))}
-          </div>
-
-          {filtered.length === 0 ? (
+          {categories.length === 0 ? (
             <div className="empty-state">
-              <span className="emoji">
-                <ShoppingBag size={28} strokeWidth={2} />
-              </span>
-              <p>Nenhum item de gasto cadastrado nesta categoria.</p>
+              <p>
+                Nenhuma categoria cadastrada. Crie categorias de gastos em Configurações antes de adicionar itens.
+              </p>
             </div>
           ) : (
-            filtered.map((exp) => (
-              <div key={exp.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14 }}>
-                <input
-                  type="checkbox"
-                  checked={exp.isPurchased}
-                  onChange={(e) => toggleExpensePurchased(exp.id, e.target.checked)}
-                  style={{ width: 20, height: 20, flexShrink: 0 }}
-                />
-                <div style={{ flex: 1 }}>
-                  <strong style={{ fontSize: '0.88rem' }}>{exp.title}</strong>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                    <span
-                      className="badge"
-                      style={{
-                        background: EXPENSE_CATEGORY_COLOR[exp.category] + '33',
-                        color: EXPENSE_CATEGORY_COLOR[exp.category],
-                      }}
+            <>
+              <AccordionSection
+                title="Filtrar por Categoria"
+                icon={<ListFilter size={17} strokeWidth={2.3} color="var(--primary)" />}
+                defaultExpanded={false}
+              >
+                <div className="chip-row">
+                  <button className={`chip ${categoryFilter === null ? 'selected' : ''}`} onClick={() => setCategoryFilter(null)}>
+                    Todas
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className={`chip ${categoryFilter === cat.id ? 'selected' : ''}`}
+                      onClick={() => setCategoryFilter(cat.id)}
                     >
-                      {EXPENSE_CATEGORY_LABEL[exp.category]}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: exp.isPurchased ? '#2E7D32' : '#E65100' }}>
-                      {exp.isPurchased ? 'Comprado' : 'A Comprar'}
-                    </span>
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </AccordionSection>
+
+              {filtered.length === 0 ? (
+                <div className="empty-state">
+                  <span className="emoji">
+                    <ShoppingBag size={28} strokeWidth={2} />
+                  </span>
+                  <p>Nenhum item de gasto cadastrado nesta categoria.</p>
+                </div>
+              ) : (
+                filtered.map((exp) => (
+                  <div
+                    key={exp.id}
+                    className="card"
+                    style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, padding: 14, cursor: 'pointer' }}
+                    onClick={() => setDetailExpenseId(exp.id)}
+                  >
+                    {exp.notes && <span className="pulse-dot" />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={{ fontSize: '0.9rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {exp.title}
+                      </strong>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                        <span className={`badge ${exp.isPurchased ? 'badge-success' : 'badge-warning'}`}>
+                          {exp.isPurchased ? 'Comprado' : 'A Comprar'}
+                        </span>
+                        <span className={`badge ${exp.isPaid ? 'badge-success' : 'badge-danger'}`}>
+                          {exp.isPaid ? 'Pago' : 'A Pagar'}
+                        </span>
+                      </div>
+                    </div>
+                    <strong style={{ flexShrink: 0 }}>{formatCurrency(exp.amount)}</strong>
+                    <ChevronRight size={18} strokeWidth={2.2} color="var(--on-surface-variant)" style={{ flexShrink: 0 }} />
                   </div>
-                </div>
-                <strong>{formatCurrency(exp.amount)}</strong>
-                <div style={{ display: 'flex', gap: 2 }}>
-                  <button className="icon-btn" onClick={() => setEditing(exp)}>
-                    <Pencil size={16} strokeWidth={2.2} />
-                  </button>
-                  <button className="icon-btn" style={{ color: 'var(--danger)' }} onClick={() => deleteExpense(exp)}>
-                    <Trash2 size={16} strokeWidth={2.2} />
-                  </button>
-                </div>
-              </div>
-            ))
+                ))
+              )}
+            </>
           )}
         </div>
       </div>
 
-      <button className="fab" onClick={() => setShowAdd(true)}>
+      <button className="fab" onClick={() => setShowAdd(true)} disabled={categories.length === 0}>
         <Plus size={24} strokeWidth={2.6} />
       </button>
 
-      {(showAdd || editing) && (
+      {(showAdd || editing) && categories.length > 0 && (
         <ExpenseDialog
           expense={editing}
+          categories={categories}
           onClose={() => {
             setShowAdd(false)
             setEditing(null)
@@ -138,10 +179,29 @@ export default function Expenses({ store }: { store: PartyStore }) {
             if (editing) {
               updateExpense({ ...editing, ...data })
             } else {
-              addExpense({ ...data, eventId: activeEvent.id, dateAddedMillis: Date.now() })
+              addExpense({ ...data, eventId: activeEvent.id, dateAddedMillis: Date.now(), notes: '' })
             }
             setShowAdd(false)
             setEditing(null)
+          }}
+        />
+      )}
+
+      {detailExpense && (
+        <ExpenseDetailDialog
+          expense={detailExpense}
+          category={findCategory(categories, detailExpense.category)}
+          onClose={() => setDetailExpenseId(null)}
+          onTogglePurchased={(checked) => toggleExpensePurchased(detailExpense.id, checked)}
+          onTogglePaid={(checked) => toggleExpensePaid(detailExpense.id, checked)}
+          onSaveNotes={(notes) => updateExpense({ ...detailExpense, notes })}
+          onEdit={() => {
+            setEditing(detailExpense)
+            setDetailExpenseId(null)
+          }}
+          onDelete={() => {
+            deleteExpense(detailExpense)
+            setDetailExpenseId(null)
           }}
         />
       )}
@@ -149,19 +209,153 @@ export default function Expenses({ store }: { store: PartyStore }) {
   )
 }
 
+function ExpenseDetailDialog({
+  expense,
+  category,
+  onClose,
+  onTogglePurchased,
+  onTogglePaid,
+  onSaveNotes,
+  onEdit,
+  onDelete,
+}: {
+  expense: ExpenseEntity
+  category: CategoryEntity
+  onClose: () => void
+  onTogglePurchased: (checked: boolean) => void
+  onTogglePaid: (checked: boolean) => void
+  onSaveNotes: (notes: string) => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const [notes, setNotes] = useState(expense.notes)
+  const [saved, setSaved] = useState(false)
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <h2>{expense.title}</h2>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <span className="badge" style={{ background: category.color + '33', color: category.color }}>
+            {category.name}
+          </span>
+          <span
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--on-surface-variant)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <Calendar size={12} /> {formatDate(expense.dateAddedMillis)}
+          </span>
+        </div>
+
+        <p style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 14px' }}>{formatCurrency(expense.amount)}</p>
+
+        <label className="field-label">Status de Compra</label>
+        <div className="chip-row" style={{ marginBottom: 14 }}>
+          <button
+            className={`chip ${!expense.isPurchased ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => onTogglePurchased(false)}
+          >
+            A Comprar
+          </button>
+          <button
+            className={`chip ${expense.isPurchased ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => onTogglePurchased(true)}
+          >
+            Comprado
+          </button>
+        </div>
+
+        <label className="field-label">Status de Pagamento</label>
+        <div className="chip-row" style={{ marginBottom: 16 }}>
+          <button
+            className={`chip ${!expense.isPaid ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => onTogglePaid(false)}
+          >
+            A Pagar
+          </button>
+          <button
+            className={`chip ${expense.isPaid ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => onTogglePaid(true)}
+          >
+            Pago
+          </button>
+        </div>
+
+        <div className="field">
+          <label className="field-label">Observação</label>
+          <textarea
+            rows={3}
+            value={notes}
+            onChange={(e) => {
+              setNotes(e.target.value)
+              setSaved(false)
+            }}
+            placeholder="Ex: comprar na promoção, aguardando orçamento do fornecedor..."
+          />
+        </div>
+        <button
+          className="btn btn-outline btn-block"
+          style={{ marginBottom: 16 }}
+          onClick={() => {
+            onSaveNotes(notes)
+            setSaved(true)
+          }}
+        >
+          {saved ? <Check size={15} strokeWidth={2.4} /> : <Save size={15} strokeWidth={2.3} />}
+          {saved ? 'Observação Salva' : 'Salvar Observação'}
+        </button>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" style={{ flex: 1 }} onClick={onEdit}>
+            <Pencil size={15} strokeWidth={2.2} /> Editar
+          </button>
+          <button className="btn" style={{ flex: 1, background: 'var(--danger)', color: 'white' }} onClick={onDelete}>
+            <Trash2 size={15} strokeWidth={2.2} /> Excluir
+          </button>
+        </div>
+
+        <div className="dialog-actions">
+          <button className="btn btn-outline btn-block" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ExpenseDialog({
   expense,
+  categories,
   onClose,
   onSave,
 }: {
   expense: ExpenseEntity | null
+  categories: CategoryEntity[]
   onClose: () => void
-  onSave: (data: { title: string; amount: number; category: ExpenseCategory; isPurchased: boolean }) => void
+  onSave: (data: {
+    title: string
+    amount: number
+    category: string
+    isPurchased: boolean
+    isPaid: boolean
+  }) => void
 }) {
   const [title, setTitle] = useState(expense?.title ?? '')
   const [amountText, setAmountText] = useState(expense?.amount?.toString() ?? '')
-  const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? 'FOOD')
+  const [category, setCategory] = useState<string>(expense?.category ?? categories[0].id)
   const [isPurchased, setIsPurchased] = useState(expense?.isPurchased ?? false)
+  const [isPaid, setIsPaid] = useState(expense?.isPaid ?? false)
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -187,27 +381,65 @@ function ExpenseDialog({
         </div>
         <label className="field-label">Categoria</label>
         <div style={{ marginBottom: 12 }}>
-          {EXPENSE_CATEGORIES.map((cat) => (
-            <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+          {categories.map((cat) => (
+            <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
               <input
                 type="radio"
-                checked={category === cat}
-                onChange={() => setCategory(cat)}
+                checked={category === cat.id}
+                onChange={() => setCategory(cat.id)}
                 style={{ width: 'auto' }}
               />
-              {EXPENSE_CATEGORY_LABEL[cat]}
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: cat.color,
+                  display: 'inline-block',
+                }}
+              />
+              {cat.name}
             </label>
           ))}
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            checked={isPurchased}
-            onChange={(e) => setIsPurchased(e.target.checked)}
-            style={{ width: 'auto' }}
-          />
-          Já comprado / pago
-        </label>
+        <label className="field-label">Status de Compra</label>
+        <div className="chip-row" style={{ marginBottom: 14 }}>
+          <button
+            type="button"
+            className={`chip ${!isPurchased ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setIsPurchased(false)}
+          >
+            A Comprar
+          </button>
+          <button
+            type="button"
+            className={`chip ${isPurchased ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setIsPurchased(true)}
+          >
+            Comprado
+          </button>
+        </div>
+        <label className="field-label">Status de Pagamento</label>
+        <div className="chip-row" style={{ marginBottom: 16 }}>
+          <button
+            type="button"
+            className={`chip ${!isPaid ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setIsPaid(false)}
+          >
+            A Pagar
+          </button>
+          <button
+            type="button"
+            className={`chip ${isPaid ? 'selected' : ''}`}
+            style={{ flex: 1, textAlign: 'center' }}
+            onClick={() => setIsPaid(true)}
+          >
+            Pago
+          </button>
+        </div>
         <div className="dialog-actions">
           <button className="btn btn-outline" onClick={onClose}>
             Cancelar
@@ -221,6 +453,7 @@ function ExpenseDialog({
                   amount: parseFloat(amountText.replace(',', '.')) || 0,
                   category,
                   isPurchased,
+                  isPaid,
                 })
               }
             }}
