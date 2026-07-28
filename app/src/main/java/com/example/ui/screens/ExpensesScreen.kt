@@ -1,11 +1,13 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,9 +21,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -32,12 +33,12 @@ import com.example.data.local.entity.FALLBACK_CATEGORY_COLOR
 import com.example.data.local.entity.FALLBACK_CATEGORY_LABEL
 import com.example.ui.components.BudgetVsSpentChart
 import com.example.ui.components.ExportUtils
+import com.example.ui.components.InputFieldShape
 import com.example.ui.components.colorFromHex
+import com.example.ui.components.elevatedFieldColors
+import com.example.ui.components.elevatedFieldShadow
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
-import dev.shreyaspatil.capturable.capturable
-import dev.shreyaspatil.capturable.controller.rememberCaptureController
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -47,16 +48,17 @@ fun ExpensesScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val captureController = rememberCaptureController()
-    var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     val activeEvent = uiState.activeEvent
     val categories = uiState.categories
 
     var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
     var showAddExpenseDialog by remember { mutableStateOf(false) }
     var editingExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
-    var detailExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    // Guarda só o id: se guardássemos o ExpenseEntity direto, o popup de detalhe ficaria
+    // com uma cópia "congelada" do momento em que foi aberto, e alternar Status de
+    // Compra/Pagamento não apareceria refletido nele (mesmo escrevendo certo no Firestore).
+    var detailExpenseId by remember { mutableStateOf<String?>(null) }
+    val detailExpense = uiState.expenses.find { it.id == detailExpenseId }
 
     val filteredExpenses = remember(uiState.expenses, selectedCategoryFilter) {
         if (selectedCategoryFilter == null) {
@@ -85,23 +87,6 @@ fun ExpensesScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = {
-                        if (activeEvent != null) {
-                            coroutineScope.launch {
-                                try {
-                                    previewBitmap = captureController.captureAsync().await()
-                                } catch (error: Throwable) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Erro ao capturar tela: ${error.message}",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }
-                    }) {
-                        Icon(imageVector = Icons.Default.Image, contentDescription = "Exportar JPG", tint = MaterialTheme.colorScheme.primary)
-                    }
                     IconButton(onClick = { showAddExpenseDialog = true }) {
                         Icon(imageVector = Icons.Default.AddShoppingCart, contentDescription = "Adicionar Gasto")
                     }
@@ -121,7 +106,6 @@ fun ExpensesScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
-                .capturable(captureController)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -187,7 +171,7 @@ fun ExpensesScreen(
                     items(filteredExpenses, key = { it.id }) { expense ->
                         ExpenseItemCard(
                             expense = expense,
-                            onClick = { detailExpense = expense }
+                            onClick = { detailExpenseId = expense.id }
                         )
                     }
                 }
@@ -204,6 +188,8 @@ fun ExpensesScreen(
             var category by remember { mutableStateOf(itemToEdit?.category ?: categories.first().id) }
             var isPurchased by remember { mutableStateOf(itemToEdit?.isPurchased ?: false) }
             var isPaid by remember { mutableStateOf(itemToEdit?.isPaid ?: false) }
+            var showCategoryPicker by remember { mutableStateOf(false) }
+            val selectedCategory = categories.find { it.id == category }
 
             AlertDialog(
                 onDismissRequest = {
@@ -218,7 +204,9 @@ fun ExpensesScreen(
                             onValueChange = { title = it },
                             label = { Text("Descrição do Item") },
                             placeholder = { Text("Ex: Salgadinhos, Refrigerantes, Decoração") },
-                            modifier = Modifier.fillMaxWidth(),
+                            shape = InputFieldShape,
+                            colors = elevatedFieldColors(),
+                            modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                             singleLine = true
                         )
 
@@ -228,35 +216,42 @@ fun ExpensesScreen(
                             label = { Text("Valor Estimado/Pago (R$)") },
                             placeholder = { Text("Ex: 150.00") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
+                            shape = InputFieldShape,
+                            colors = elevatedFieldColors(),
+                            modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                             singleLine = true
                         )
 
-                        Text("Categoria:", style = MaterialTheme.typography.labelMedium)
-                        Column {
-                            categories.forEach { cat ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
+                        OutlinedTextField(
+                            value = selectedCategory?.name ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Categoria") },
+                            leadingIcon = {
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp)
-                                ) {
-                                    RadioButton(
-                                        selected = (category == cat.id),
-                                        onClick = { category = cat.id }
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .clip(RoundedCornerShape(50))
-                                            .background(colorFromHex(cat.color))
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(cat.name, style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
+                                        .padding(start = 4.dp)
+                                        .size(12.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(colorFromHex(selectedCategory?.color ?: FALLBACK_CATEGORY_COLOR))
+                                )
+                            },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = "Escolher categoria") },
+                            shape = InputFieldShape,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .elevatedFieldShadow()
+                                .clickable { showCategoryPicker = true },
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledContainerColor = MaterialTheme.colorScheme.surface
+                            )
+                        )
 
                         Text("Status de Compra:", style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -328,6 +323,54 @@ fun ExpensesScreen(
                     }
                 }
             )
+
+            if (showCategoryPicker) {
+                AlertDialog(
+                    onDismissRequest = { showCategoryPicker = false },
+                    title = { Text("Selecione a Categoria") },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 420.dp)
+                                .verticalScroll(rememberScrollState())
+                                .selectableGroup()
+                        ) {
+                            categories.forEach { cat ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = (category == cat.id),
+                                            onClick = {
+                                                category = cat.id
+                                                showCategoryPicker = false
+                                            },
+                                            role = Role.RadioButton
+                                        )
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(selected = (category == cat.id), onClick = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(colorFromHex(cat.color))
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(cat.name, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showCategoryPicker = false }) {
+                            Text("Fechar")
+                        }
+                    }
+                )
+            }
         }
 
         // Expense Detail Dialog (full info + observação + ações)
@@ -335,66 +378,21 @@ fun ExpensesScreen(
             ExpenseDetailDialog(
                 expense = expense,
                 categories = categories,
-                onDismiss = { detailExpense = null },
+                onDismiss = { detailExpenseId = null },
                 onTogglePurchased = { viewModel.toggleExpensePurchased(expense.id, it) },
                 onTogglePaid = { viewModel.toggleExpensePaid(expense.id, it) },
                 onSaveNotes = { notes -> viewModel.updateExpense(expense.copy(notes = notes)) },
                 onEditClick = {
-                    detailExpense = null
+                    detailExpenseId = null
                     editingExpense = expense
                 },
                 onDeleteClick = {
                     viewModel.deleteExpense(expense)
-                    detailExpense = null
+                    detailExpenseId = null
                 }
             )
         }
 
-        // JPG Export Preview Dialog
-        previewBitmap?.let { bitmap ->
-            Dialog(onDismissRequest = { previewBitmap = null }) {
-                Card(shape = RoundedCornerShape(20.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Prévia da Imagem",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "Prévia dos gastos do evento",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 420.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = { previewBitmap = null }) {
-                                Text("Cancelar")
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Button(onClick = {
-                                ExportUtils.shareBitmapAsJpg(
-                                    context,
-                                    bitmap.asAndroidBitmap(),
-                                    "Gastos_${activeEvent?.title ?: ""}"
-                                )
-                                previewBitmap = null
-                            }) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Compartilhar")
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

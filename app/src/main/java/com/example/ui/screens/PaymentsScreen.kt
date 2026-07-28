@@ -93,11 +93,11 @@ fun PaymentsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // Top Header Collection Summary
+            // Top Header Collection Summary — segue a cor do tema selecionado em vez de um roxo fixo
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A29)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -105,7 +105,7 @@ fun PaymentsScreen(
                         text = "Arrecadação Geral do Evento",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -115,7 +115,7 @@ fun PaymentsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Total Arrecadado", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.8f))
+                            Text("Total Arrecadado", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f))
                             Text(
                                 text = ExportUtils.formatCurrency(summary.totalCollected),
                                 style = MaterialTheme.typography.headlineSmall,
@@ -125,7 +125,7 @@ fun PaymentsScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("Valor Faltante", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.8f))
+                            Text("Valor Faltante", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f))
                             Text(
                                 text = ExportUtils.formatCurrency(summary.missingCollection),
                                 style = MaterialTheme.typography.headlineSmall,
@@ -145,7 +145,7 @@ fun PaymentsScreen(
                             .height(10.dp)
                             .clip(RoundedCornerShape(5.dp)),
                         color = Color(0xFF2ECC71),
-                        trackColor = Color.White.copy(alpha = 0.2f)
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -153,7 +153,7 @@ fun PaymentsScreen(
                     Text(
                         text = "Meta de Arrecadação: ${ExportUtils.formatCurrency(summary.totalExpectedCollection)} • ${(collectionPercentage * 100).toInt()}% Concluído",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
                     )
                 }
             }

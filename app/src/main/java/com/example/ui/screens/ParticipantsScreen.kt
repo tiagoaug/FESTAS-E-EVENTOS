@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -27,7 +30,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entity.ParticipantEntity
 import com.example.data.local.entity.ParticipantType
 import com.example.ui.components.ExportUtils
+import com.example.ui.components.InputFieldShape
 import com.example.ui.components.PaymentDialog
+import com.example.ui.components.elevatedFieldColors
+import com.example.ui.components.elevatedFieldShadow
 import com.example.ui.viewmodel.PartyUiState
 import com.example.ui.viewmodel.PartyViewModel
 
@@ -276,6 +282,18 @@ fun ParticipantsScreen(
             val familyMembers = remember { mutableStateListOf(FamilyMemberDraft()) }
             val validMemberCount = familyMembers.count { it.name.isNotBlank() }
 
+            // Permite escolher uma família já existente (para adicionar mais integrantes
+            // a ela depois) em vez de só poder digitar um nome novo toda vez.
+            var showFamilyPicker by remember { mutableStateOf(false) }
+            var newFamilyPickerText by remember { mutableStateOf("") }
+            val existingFamilies = remember(uiState.participants) {
+                uiState.participants
+                    .map { it.familyGroup }
+                    .filter { it.isNotBlank() && it != "Sem Família" }
+                    .distinct()
+                    .sorted()
+            }
+
             fun closeDialog() {
                 showAddParticipantDialog = false
                 editingParticipant = null
@@ -316,7 +334,9 @@ fun ParticipantsScreen(
                                 value = name,
                                 onValueChange = { name = it },
                                 label = { Text("Nome do Participante") },
-                                modifier = Modifier.fillMaxWidth(),
+                                shape = InputFieldShape,
+                                colors = elevatedFieldColors(),
+                                modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                                 singleLine = true
                             )
 
@@ -326,7 +346,9 @@ fun ParticipantsScreen(
                                 label = { Text("Telefone / WhatsApp (DDDNumeros)") },
                                 placeholder = { Text("Ex: 11999998888") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                modifier = Modifier.fillMaxWidth(),
+                                shape = InputFieldShape,
+                                colors = elevatedFieldColors(),
+                                modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                                 singleLine = true
                             )
 
@@ -336,7 +358,9 @@ fun ParticipantsScreen(
                                     onValueChange = { familyGroup = it },
                                     label = { Text("Grupo / Nome da Família") },
                                     placeholder = { Text("Ex: Família Silva, Amigos do Trabalho") },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = InputFieldShape,
+                                    colors = elevatedFieldColors(),
+                                    modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                                     singleLine = true
                                 )
                             }
@@ -360,44 +384,65 @@ fun ParticipantsScreen(
                                 onValueChange = { newFamilyName = it },
                                 label = { Text("Nome da Família") },
                                 placeholder = { Text("Ex: Família Silva") },
-                                modifier = Modifier.fillMaxWidth(),
+                                trailingIcon = {
+                                    if (existingFamilies.isNotEmpty()) {
+                                        IconButton(onClick = { showFamilyPicker = true }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Escolher família existente")
+                                        }
+                                    }
+                                },
+                                shape = InputFieldShape,
+                                colors = elevatedFieldColors(),
+                                modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                                 singleLine = true
                             )
 
                             Text("Integrantes:", style = MaterialTheme.typography.labelMedium)
                             familyMembers.forEachIndexed { index, member ->
-                                Row(
+                                Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    OutlinedTextField(
-                                        value = member.name,
-                                        onValueChange = { member.name = it },
-                                        placeholder = { Text("Nome ${index + 1}") },
-                                        modifier = Modifier.weight(2f),
-                                        singleLine = true
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = member.name,
+                                            onValueChange = { member.name = it },
+                                            placeholder = { Text("Nome ${index + 1}") },
+                                            shape = InputFieldShape,
+                                            colors = elevatedFieldColors(),
+                                            modifier = Modifier.weight(1f).elevatedFieldShadow(),
+                                            singleLine = true
+                                        )
+                                        FilterChip(
+                                            selected = member.type == ParticipantType.CHILD,
+                                            onClick = {
+                                                member.type = if (member.type == ParticipantType.ADULT) ParticipantType.CHILD else ParticipantType.ADULT
+                                            },
+                                            label = { Text(if (member.type == ParticipantType.ADULT) "Ad." else "Cri.") }
+                                        )
+                                        if (familyMembers.size > 1) {
+                                            IconButton(onClick = { familyMembers.removeAt(index) }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Remover", tint = Color(0xFFD32F2F))
+                                            }
+                                        }
+                                    }
                                     OutlinedTextField(
                                         value = member.phone,
                                         onValueChange = { member.phone = it },
                                         placeholder = { Text("Telefone") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                        modifier = Modifier.weight(1f),
+                                        shape = InputFieldShape,
+                                        colors = elevatedFieldColors(),
+                                        modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
                                         singleLine = true
                                     )
-                                    FilterChip(
-                                        selected = member.type == ParticipantType.CHILD,
-                                        onClick = {
-                                            member.type = if (member.type == ParticipantType.ADULT) ParticipantType.CHILD else ParticipantType.ADULT
-                                        },
-                                        label = { Text(if (member.type == ParticipantType.ADULT) "Ad." else "Cri.") }
-                                    )
-                                    if (familyMembers.size > 1) {
-                                        IconButton(onClick = { familyMembers.removeAt(index) }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Remover", tint = Color(0xFFD32F2F))
-                                        }
-                                    }
+                                }
+                                if (index < familyMembers.lastIndex) {
+                                    Spacer(modifier = Modifier.height(4.dp))
                                 }
                             }
                             OutlinedButton(
@@ -412,7 +457,8 @@ fun ParticipantsScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(
+                    com.example.ui.components.GradientButton(
+                        text = if (!isEditing && addMode == "FAMILIA") "Salvar Família ($validMemberCount)" else "Salvar",
                         onClick = {
                             if (activeEvent != null) {
                                 when {
@@ -466,16 +512,78 @@ fun ParticipantsScreen(
                             }
                             closeDialog()
                         }
-                    ) {
-                        Text(if (!isEditing && addMode == "FAMILIA") "Salvar Família ($validMemberCount)" else "Salvar")
-                    }
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = { closeDialog() }) {
-                        Text("Cancelar")
+                    OutlinedButton(onClick = { closeDialog() }, shape = RoundedCornerShape(14.dp)) {
+                        Text("Cancelar", fontWeight = FontWeight.Bold)
                     }
                 }
             )
+
+            if (showFamilyPicker) {
+                AlertDialog(
+                    onDismissRequest = { showFamilyPicker = false; newFamilyPickerText = "" },
+                    title = { Text("Selecione a Família") },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState())
+                                .selectableGroup()
+                        ) {
+                            existingFamilies.forEach { fam ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = (newFamilyName == fam),
+                                            onClick = {
+                                                newFamilyName = fam
+                                                showFamilyPicker = false
+                                            },
+                                            role = Role.RadioButton
+                                        )
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(selected = (newFamilyName == fam), onClick = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(fam)
+                                }
+                            }
+
+                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            OutlinedTextField(
+                                value = newFamilyPickerText,
+                                onValueChange = { newFamilyPickerText = it },
+                                label = { Text("Ou digite uma família nova") },
+                                shape = InputFieldShape,
+                                colors = elevatedFieldColors(),
+                                modifier = Modifier.fillMaxWidth().elevatedFieldShadow(),
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (newFamilyPickerText.isNotBlank()) {
+                                newFamilyName = newFamilyPickerText.trim()
+                            }
+                            showFamilyPicker = false
+                            newFamilyPickerText = ""
+                        }) {
+                            Text("Usar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFamilyPicker = false; newFamilyPickerText = "" }) {
+                            Text("Fechar")
+                        }
+                    }
+                )
+            }
         }
 
         // Give Payment Dialog ("Dar Baixa em Pagamento")
