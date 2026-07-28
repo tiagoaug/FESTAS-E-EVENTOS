@@ -11,10 +11,13 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -129,11 +132,26 @@ class PartyRepository(uid: String) {
     private val categoriesCollection = userDoc.collection("categories")
     private val metaCollection = userDoc.collection("meta")
 
+    // Firestore dispara addSnapshotListener mais de uma vez por escrita (cache local,
+    // depois confirmação do servidor) e também em reconexões/refresh de auth, mesmo sem
+    // nenhuma mudança real nos dados. Sem distinctUntilChanged, cada um desses disparos
+    // recriava o PartyUiState inteiro e recompunha a tela inteira — competindo com o
+    // scroll pelo orçamento de frame e causando engasgos.
+    //
+    // Além disso, o listener do Firestore chama de volta na main thread por padrão, e sem
+    // flowOn o parsing dos documentos (documentToEvent/Participant/etc.) e a ordenação
+    // (.sortedBy/.sortedWith) rodavam ali mesmo, na main thread — competindo diretamente
+    // com o scroll pelo tempo de frame a cada snapshot. Com flowOn(Dispatchers.Default),
+    // esse trabalho passa a rodar numa thread de background.
     val allEvents: Flow<List<EventEntity>> = eventsCollection.snapshots()
         .map { docs -> docs.map(::documentToEvent).sortedBy { it.eventDateMillis } }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     val allCategories: Flow<List<CategoryEntity>> = categoriesCollection.snapshots()
         .map { docs -> docs.map(::documentToCategory) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     val activeEventId: Flow<String?> = callbackFlow {
         val registration = userDoc.addSnapshotListener { snapshot, error ->
@@ -144,15 +162,19 @@ class PartyRepository(uid: String) {
             trySend(snapshot?.getString("activeEventId"))
         }
         awaitClose { registration.remove() }
-    }
+    }.distinctUntilChanged()
 
     fun getParticipants(eventId: String): Flow<List<ParticipantEntity>> =
         participantsCollection.whereEqualTo("eventId", eventId).snapshots()
             .map { docs -> docs.map(::documentToParticipant).sortedWith(compareBy({ it.familyGroup }, { it.name })) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
 
     fun getExpenses(eventId: String): Flow<List<ExpenseEntity>> =
         expensesCollection.whereEqualTo("eventId", eventId).snapshots()
             .map { docs -> docs.map(::documentToExpense).sortedByDescending { it.dateAddedMillis } }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
 
     /**
      * Semeia as categorias padrão uma única vez por usuário, usando um documento

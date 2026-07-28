@@ -61,15 +61,25 @@ fun InvitationsScreen(
     if (!useWhatsApp) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { Text("Convites & WhatsApp", fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         IconButton(onClick = onNavigateBack) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-                )
+                        Text(
+                            text = "Convites & WhatsApp",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         ) { innerPadding ->
             Column(
@@ -101,15 +111,25 @@ fun InvitationsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Convites & WhatsApp", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+                    Text(
+                        text = "Convites & WhatsApp",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Column(

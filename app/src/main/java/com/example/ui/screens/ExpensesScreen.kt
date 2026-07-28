@@ -1,11 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -24,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -75,14 +68,23 @@ fun ExpensesScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Controle de Gastos", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
-                },
-                actions = {
+                    Text(
+                        text = "Controle de Gastos",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
                     IconButton(onClick = {
                         if (activeEvent != null) {
                             coroutineScope.launch {
@@ -103,9 +105,8 @@ fun ExpensesScreen(
                     IconButton(onClick = { showAddExpenseDialog = true }) {
                         Icon(imageVector = Icons.Default.AddShoppingCart, contentDescription = "Adicionar Gasto")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+                }
+            }
         },
         floatingActionButton = {
             com.example.ui.components.GradientFab(
@@ -479,34 +480,20 @@ private fun ExpenseItemCard(
     }
 }
 
+/**
+ * Indicador estático de que o item tem observação. Antes era uma animação contínua
+ * (rememberInfiniteTransition rodando a 60fps por item visível, o tempo todo, não só
+ * durante o scroll) — trocado por um ponto fixo com um halo sutil, sem custo de
+ * recomposição/redraw contínuo.
+ */
 @Composable
 private fun PulsingDot(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pulseScale"
-    )
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pulseAlpha"
-    )
     Box(modifier = modifier.size(20.dp), contentAlignment = Alignment.Center) {
         Box(
             modifier = Modifier
-                .size(20.dp)
-                .scale(scale)
+                .size(16.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFE5484D).copy(alpha = alpha))
+                .background(Color(0xFFE5484D).copy(alpha = 0.25f))
         )
         Box(
             modifier = Modifier

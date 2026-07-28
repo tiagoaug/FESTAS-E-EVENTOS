@@ -9,6 +9,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontFamily
 
 enum class AppThemeId(val label: String, val swatch: Color) {
@@ -17,6 +18,28 @@ enum class AppThemeId(val label: String, val swatch: Color) {
     ESMERALDA("Esmeralda", PrimaryEsmeralda),
     CORAL("Coral", PrimaryCoral),
     CLARO("Claro", Color(0xFFB8BEC7)),
+}
+
+/**
+ * Material3 só substitui os ~15 papéis passados explicitamente a lightColorScheme/
+ * darkColorScheme; todo o resto (surfaceContainer, surfaceContainerHigh, outline etc,
+ * usados por AlertDialog e outros "submenus") cai no roxo padrão da paleta base do
+ * M3 — por isso diálogos ficavam sempre com a mesma cor roxa, ignorando o tema
+ * escolhido. Aqui derivamos esses papéis a partir da própria cor primária do tema.
+ */
+private fun ColorScheme.withThemedContainers(isDark: Boolean): ColorScheme {
+    fun tinted(fraction: Float) = lerp(surface, primary, fraction)
+    return copy(
+        surfaceDim = lerp(surface, onSurface, if (isDark) 0f else 0.08f),
+        surfaceBright = lerp(surface, Color.White, if (isDark) 0.16f else 0f),
+        surfaceContainerLowest = if (isDark) lerp(surface, Color.Black, 0.06f) else surface,
+        surfaceContainerLow = tinted(if (isDark) 0.05f else 0.03f),
+        surfaceContainer = tinted(if (isDark) 0.08f else 0.05f),
+        surfaceContainerHigh = tinted(if (isDark) 0.11f else 0.08f),
+        surfaceContainerHighest = tinted(if (isDark) 0.14f else 0.11f),
+        outline = lerp(onSurface, primary, 0.3f),
+        outlineVariant = surfaceVariant,
+    )
 }
 
 private fun buildLightScheme(primary: Color, primaryContainer: Color, onPrimaryContainer: Color): ColorScheme =
@@ -39,7 +62,7 @@ private fun buildLightScheme(primary: Color, primaryContainer: Color, onPrimaryC
         onSurface = OnSurfaceVibrant,
         surfaceVariant = SurfaceVariantVibrant,
         onSurfaceVariant = OnSurfaceVariantVibrant,
-    )
+    ).withThemedContainers(isDark = false)
 
 /**
  * Tema "Claro": fundo branco vidro e tons prateados/acinzentados neutros,
@@ -64,7 +87,7 @@ private fun buildNeutralLightScheme(): ColorScheme = lightColorScheme(
     onSurface = Color(0xFF2B3238),
     surfaceVariant = Color(0xFFF4F6F8),
     onSurfaceVariant = Color(0xFF6B7280),
-)
+).withThemedContainers(isDark = false)
 
 private fun buildNeutralDarkScheme(): ColorScheme = darkColorScheme(
     primary = Color(0xFFC0C5CC),
@@ -76,7 +99,7 @@ private fun buildNeutralDarkScheme(): ColorScheme = darkColorScheme(
     background = Color(0xFF1C1F22),
     surface = Color(0xFF1C1F22),
     surfaceVariant = Color(0xFF2A2E33),
-)
+).withThemedContainers(isDark = true)
 
 private fun buildDarkScheme(primary: Color, primaryContainer: Color, onPrimaryContainer: Color): ColorScheme =
     darkColorScheme(
@@ -89,7 +112,7 @@ private fun buildDarkScheme(primary: Color, primaryContainer: Color, onPrimaryCo
         background = Color(0xFF141218),
         surface = Color(0xFF141218),
         surfaceVariant = Color(0xFF2B2832),
-    )
+    ).withThemedContainers(isDark = true)
 
 private val lightSchemes: Map<AppThemeId, ColorScheme> = mapOf(
     AppThemeId.VIOLETA to buildLightScheme(PrimaryViolet, PrimaryVioletContainer, OnPrimaryVioletContainer),

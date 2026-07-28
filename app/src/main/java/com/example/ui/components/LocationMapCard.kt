@@ -3,8 +3,6 @@ package com.example.ui.components
 import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,30 +39,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 
-private const val LEAFLET_ASSET_BASE_URL = "file:///android_asset/leaflet/"
-
-private fun buildLeafletHtml(lat: Double, lon: Double): String {
-    return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-          <link rel="stylesheet" href="leaflet.css" />
-          <style>
-            html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; }
-          </style>
-        </head>
-        <body>
-          <div id="map"></div>
-          <script src="leaflet.js"></script>
-          <script>
-            var map = L.map('map', { attributionControl: false }).setView([$lat, $lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            L.marker([$lat, $lon]).addTo(map);
-          </script>
-        </body>
-        </html>
+private fun buildLeafletHtml(context: android.content.Context, lat: Double, lon: Double): String {
+    val script = """
+        var map = L.map('map', { attributionControl: false }).setView([$lat, $lon], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        L.marker([$lat, $lon], { icon: pinIcon }).addTo(map);
     """.trimIndent()
+    return buildInlineLeafletDocument(context, script)
 }
 
 /**
@@ -80,7 +61,9 @@ private fun buildLeafletHtml(lat: Double, lon: Double): String {
 fun LocationMapCard(
     location: String,
     modifier: Modifier = Modifier,
-    defaultExpanded: Boolean = false
+    defaultExpanded: Boolean = false,
+    latitude: Double? = null,
+    longitude: Double? = null
 ) {
     if (location.isBlank()) return
 
@@ -89,11 +72,18 @@ fun LocationMapCard(
     val encodedQuery = Uri.encode(location)
     val searchUrl = "https://www.google.com/maps/search/?api=1&query=$encodedQuery"
 
-    var geoResult by remember(location) { mutableStateOf<GeoResult?>(null) }
-    var geoFailed by remember(location) { mutableStateOf(false) }
-    var isLoading by remember(location) { mutableStateOf(false) }
+    // Se o evento já tem um pin salvo (ajustado manualmente no Cadastro do Evento), usamos
+    // exatamente essas coordenadas em vez de geocodificar de novo — evita que o Dashboard
+    // mostre um local diferente do que foi ajustado à mão na tela de cadastro.
+    val savedResult = remember(latitude, longitude) {
+        if (latitude != null && longitude != null) GeoResult(latitude, longitude) else null
+    }
 
-    LaunchedEffect(location, expanded) {
+    var geoResult by remember(location, savedResult) { mutableStateOf(savedResult) }
+    var geoFailed by remember(location, savedResult) { mutableStateOf(false) }
+    var isLoading by remember(location, savedResult) { mutableStateOf(false) }
+
+    LaunchedEffect(location, expanded, savedResult) {
         if (expanded && geoResult == null && !geoFailed) {
             isLoading = true
             val result = geocodeAddress(location)
@@ -149,7 +139,7 @@ fun LocationMapCard(
                 }
             }
 
-            AnimatedVisibility(visible = expanded) {
+            if (expanded) {
                 Column {
                     when {
                         isLoading -> {
@@ -164,7 +154,7 @@ fun LocationMapCard(
                         }
                         geoResult != null -> {
                             val result = geoResult!!
-                            val html = remember(result) { buildLeafletHtml(result.lat, result.lon) }
+                            val html = remember(result) { buildLeafletHtml(context, result.lat, result.lon) }
                             val loadedHtml = remember { mutableStateOf<String?>(null) }
                             AndroidView(
                                 modifier = Modifier
@@ -173,20 +163,21 @@ fun LocationMapCard(
                                     .clip(RoundedCornerShape(0.dp)),
                                 factory = { ctx ->
                                     WebView(ctx).apply {
-                                        webViewClient = WebViewClient()
+                                        webViewClient = debugLeafletWebViewClient()
+                                        webChromeClient = debugLeafletWebChromeClient()
                                         settings.javaScriptEnabled = true
                                         settings.domStorageEnabled = true
                                         isVerticalScrollBarEnabled = false
                                         isHorizontalScrollBarEnabled = false
                                         ViewCompat.setNestedScrollingEnabled(this, true)
-                                        loadDataWithBaseURL(LEAFLET_ASSET_BASE_URL, html, "text/html", "UTF-8", null)
+                                        loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
                                         loadedHtml.value = html
                                     }
                                 },
                                 update = { webView ->
                                     ViewCompat.setNestedScrollingEnabled(webView, true)
                                     if (loadedHtml.value != html) {
-                                        webView.loadDataWithBaseURL(LEAFLET_ASSET_BASE_URL, html, "text/html", "UTF-8", null)
+                                        webView.loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
                                         loadedHtml.value = html
                                     }
                                 }

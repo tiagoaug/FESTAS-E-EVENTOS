@@ -144,7 +144,11 @@ fun DashboardScreen(
                 )
 
                 // Location Map (minimized by default)
-                LocationMapCard(location = activeEvent.location)
+                LocationMapCard(
+                    location = activeEvent.location,
+                    latitude = activeEvent.latitude,
+                    longitude = activeEvent.longitude
+                )
 
                 // Quick Actions & Sharing Banner
                 Card(

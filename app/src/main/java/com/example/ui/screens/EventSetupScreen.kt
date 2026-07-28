@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -23,6 +24,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entity.CostShareMode
 import com.example.data.local.entity.EventEntity
 import com.example.ui.components.EventLocationCard
@@ -58,9 +60,14 @@ fun EventSetupScreen(
     var fixedChildText by remember(activeEvent) { mutableStateOf(activeEvent?.fixedChildPrice?.toString() ?: "20.0") }
 
     val eventTypesList = listOf("Aniversário", "Casamento", "Chá de Bebê / Panela", "Formatura", "Churrasco", "Outro")
+    val customEventTypes by viewModel.customEventTypes.collectAsStateWithLifecycle()
+    val allEventTypes = remember(customEventTypes) { eventTypesList + customEventTypes }
 
     var showDeleteConfirmDialog by remember { mutableStateOf<EventEntity?>(null) }
     var showBudgetCalculator by remember { mutableStateOf(false) }
+    var showEventTypeDialog by remember { mutableStateOf(false) }
+    var showAddEventTypeInput by remember { mutableStateOf(false) }
+    var newEventTypeText by remember { mutableStateOf("") }
 
     val calendar = Calendar.getInstance().apply { timeInMillis = eventDateMillis }
 
@@ -91,15 +98,25 @@ fun EventSetupScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Cadastro & Rateio do Evento", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
+                    Text(
+                        text = "Cadastro & Rateio do Evento",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -139,38 +156,26 @@ fun EventSetupScreen(
                         singleLine = true
                     )
 
-                    // Event Type Selection Chips
-                    Text(
-                        text = "Tipo de Evento",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
+                    // Event Type Selection (popup, evita chips quebrando o texto)
+                    OutlinedTextField(
+                        value = eventType,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Tipo de Evento") },
+                        leadingIcon = { Icon(Icons.Default.Celebration, contentDescription = null) },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = "Escolher tipo de evento") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showEventTypeDialog = true },
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        eventTypesList.take(3).forEach { type ->
-                            FilterChip(
-                                selected = (eventType == type),
-                                onClick = { eventType = type },
-                                label = { Text(type, style = MaterialTheme.typography.bodySmall) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        eventTypesList.drop(3).forEach { type ->
-                            FilterChip(
-                                selected = (eventType == type),
-                                onClick = { eventType = type },
-                                label = { Text(type, style = MaterialTheme.typography.bodySmall) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
 
                     OutlinedTextField(
                         value = budgetText,
@@ -527,6 +532,98 @@ fun EventSetupScreen(
             MiniCalculator(
                 onDismiss = { showBudgetCalculator = false },
                 onUseResult = { value -> budgetText = value.toString() }
+            )
+        }
+
+        if (showEventTypeDialog) {
+            fun closeEventTypeDialog() {
+                showEventTypeDialog = false
+                showAddEventTypeInput = false
+                newEventTypeText = ""
+            }
+            AlertDialog(
+                onDismissRequest = { closeEventTypeDialog() },
+                title = { Text("Selecione o Tipo de Evento") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                            .selectableGroup()
+                    ) {
+                        allEventTypes.forEach { type ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = (type == eventType),
+                                        onClick = {
+                                            eventType = type
+                                            closeEventTypeDialog()
+                                        },
+                                        role = Role.RadioButton
+                                    )
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (type == eventType),
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = type)
+                            }
+                        }
+
+                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        if (showAddEventTypeInput) {
+                            OutlinedTextField(
+                                value = newEventTypeText,
+                                onValueChange = { newEventTypeText = it },
+                                label = { Text("Novo tipo de evento") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    val trimmed = newEventTypeText.trim()
+                                    if (trimmed.isNotEmpty()) {
+                                        viewModel.addCustomEventType(trimmed, eventTypesList)
+                                        eventType = trimmed
+                                    }
+                                    closeEventTypeDialog()
+                                },
+                                enabled = newEventTypeText.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Adicionar e Selecionar")
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAddEventTypeInput = true }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Adicionar outro tipo",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { closeEventTypeDialog() }) {
+                        Text("Fechar")
+                    }
+                }
             )
         }
     }

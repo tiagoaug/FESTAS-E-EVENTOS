@@ -38,6 +38,36 @@ suspend fun geocodeAddress(address: String): GeoResult? = withContext(Dispatcher
     }
 }
 
+/**
+ * Segue os redirecionamentos HTTP de um link curto (maps.app.goo.gl) manualmente,
+ * em vez de depender do usuário abrir o link no navegador e colar o endereço final —
+ * evita o passo manual de "copiar o link completo".
+ */
+suspend fun resolveShortLink(shortUrl: String): String? = withContext(Dispatchers.IO) {
+    try {
+        var currentUrl = shortUrl
+        repeat(5) {
+            val connection = URL(currentUrl).openConnection() as HttpURLConnection
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android) FestasEEventosApp/1.0")
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            connection.requestMethod = "GET"
+            val code = connection.responseCode
+            val location = connection.getHeaderField("Location")
+            connection.disconnect()
+            if (code in 300..399 && location != null) {
+                currentUrl = location
+            } else {
+                return@withContext currentUrl
+            }
+        }
+        currentUrl
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun isShortGoogleMapsLink(input: String): Boolean {
     val trimmed = input.trim()
     return try {

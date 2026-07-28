@@ -19,21 +19,21 @@ import java.util.Locale
 
 object ExportUtils {
 
-    fun formatCurrency(amount: Double): String {
-        val ptBr = Locale("pt", "BR")
-        val formatter = NumberFormat.getCurrencyInstance(ptBr)
-        return formatter.format(amount)
-    }
+    // Criar NumberFormat/SimpleDateFormat é caro (lookup de locale + parsing de padrão).
+    // Essas funções são chamadas por item em listas (Convidados, Gastos) a cada
+    // recomposição/scroll — reusar as instâncias evita recriar isso centenas de vezes.
+    // SimpleDateFormat/NumberFormat não são thread-safe, mas tudo aqui roda na main thread
+    // (chamado só de dentro de composables), então uma instância compartilhada é segura.
+    private val ptBr = Locale("pt", "BR")
+    private val currencyFormatter = NumberFormat.getCurrencyInstance(ptBr)
+    private val dateTimeFormatter = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", ptBr)
+    private val dateOnlyFormatter = SimpleDateFormat("dd/MM/yyyy", ptBr)
 
-    fun formatDate(timeMillis: Long): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy 'às' HH:mm", Locale("pt", "BR"))
-        return sdf.format(Date(timeMillis))
-    }
+    fun formatCurrency(amount: Double): String = currencyFormatter.format(amount)
 
-    fun formatDateOnly(timeMillis: Long): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-        return sdf.format(Date(timeMillis))
-    }
+    fun formatDate(timeMillis: Long): String = dateTimeFormatter.format(Date(timeMillis))
+
+    fun formatDateOnly(timeMillis: Long): String = dateOnlyFormatter.format(Date(timeMillis))
 
     fun createGoogleCalendarIntent(context: Context, event: EventEntity) {
         val intent = Intent(Intent.ACTION_INSERT).apply {

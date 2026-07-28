@@ -6,8 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,38 +81,21 @@ private fun composeAddress(fields: AddressFields): String {
     return listOf(streetPart, middlePart).filter { it.isNotEmpty() }.joinToString(" - ")
 }
 
-private const val LEAFLET_ASSET_BASE_URL = "file:///android_asset/leaflet/"
-
-private fun buildDraggablePinHtml(lat: Double, lon: Double): String {
-    return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-          <link rel="stylesheet" href="leaflet.css" />
-          <style>
-            html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; }
-          </style>
-        </head>
-        <body>
-          <div id="map"></div>
-          <script src="leaflet.js"></script>
-          <script>
-            var map = L.map('map', { attributionControl: false }).setView([$lat, $lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            var marker = L.marker([$lat, $lon], { draggable: true }).addTo(map);
-            marker.on('dragend', function() {
-              var pos = marker.getLatLng();
-              AndroidPinBridge.onPinMoved(pos.lat, pos.lng);
-            });
-            map.on('click', function(e) {
-              marker.setLatLng(e.latlng);
-              AndroidPinBridge.onPinMoved(e.latlng.lat, e.latlng.lng);
-            });
-          </script>
-        </body>
-        </html>
+private fun buildDraggablePinHtml(context: android.content.Context, lat: Double, lon: Double): String {
+    val script = """
+        var map = L.map('map', { attributionControl: false }).setView([$lat, $lon], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        var marker = L.marker([$lat, $lon], { draggable: true, icon: pinIcon }).addTo(map);
+        marker.on('dragend', function() {
+          var pos = marker.getLatLng();
+          AndroidPinBridge.onPinMoved(pos.lat, pos.lng);
+        });
+        map.on('click', function(e) {
+          marker.setLatLng(e.latlng);
+          AndroidPinBridge.onPinMoved(e.latlng.lat, e.latlng.lng);
+        });
     """.trimIndent()
+    return buildInlineLeafletDocument(context, script)
 }
 
 private class PinBridge(private val onMoved: (Double, Double) -> Unit) {
@@ -153,6 +134,7 @@ fun EventLocationCard(
 
     var mapsLinkText by remember { mutableStateOf("") }
     var linkError by remember { mutableStateOf<String?>(null) }
+    var resolvingLink by remember { mutableStateOf(false) }
     var geocoding by remember { mutableStateOf(false) }
     var geocodeError by remember { mutableStateOf<String?>(null) }
 
@@ -199,7 +181,7 @@ fun EventLocationCard(
                 }
             }
 
-            AnimatedVisibility(visible = expanded) {
+            if (expanded) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -333,7 +315,17 @@ fun EventLocationCard(
                             linkError = null
                             if (mapsLinkText.isBlank()) return@IconButton
                             if (isShortGoogleMapsLink(mapsLinkText)) {
-                                linkError = "Links curtos (maps.app.goo.gl) não podem ser lidos direto pelo app. Abra o link, copie o endereço completo que aparece na barra do navegador e cole aqui."
+                                resolvingLink = true
+                                scope.launch {
+                                    val resolved = resolveShortLink(mapsLinkText)
+                                    val parsed = resolved?.let { parseGoogleMapsCoords(it) }
+                                    if (parsed != null) {
+                                        onCoordsChange(parsed.lat, parsed.lon)
+                                    } else {
+                                        linkError = "Não conseguimos resolver esse link curto agora. Abra-o no navegador, copie o endereço completo e cole aqui."
+                                    }
+                                    resolvingLink = false
+                                }
                                 return@IconButton
                             }
                             val parsed = parseGoogleMapsCoords(mapsLinkText)
@@ -343,7 +335,11 @@ fun EventLocationCard(
                             }
                             onCoordsChange(parsed.lat, parsed.lon)
                         }) {
-                            Icon(Icons.Default.Link, contentDescription = "Localizar pin pelo link")
+                            if (resolvingLink) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            } else {
+                                Icon(Icons.Default.Link, contentDescription = "Localizar pin pelo link")
+                            }
                         }
                     }
                     linkError?.let {
@@ -356,7 +352,7 @@ fun EventLocationCard(
                         Text("Ajuste fino: toque ou arraste o pin no mapa", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
 
-                    val html = remember(lat, lng) { buildDraggablePinHtml(lat, lng) }
+                    val html = remember(lat, lng) { buildDraggablePinHtml(context, lat, lng) }
                     val loadedHtml = remember { mutableStateOf<String?>(null) }
                     AndroidView(
                         modifier = Modifier
@@ -365,14 +361,15 @@ fun EventLocationCard(
                             .clip(RoundedCornerShape(16.dp)),
                         factory = { ctx ->
                             WebView(ctx).apply {
-                                webViewClient = WebViewClient()
+                                webViewClient = debugLeafletWebViewClient()
+                                webChromeClient = debugLeafletWebChromeClient()
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 isVerticalScrollBarEnabled = false
                                 isHorizontalScrollBarEnabled = false
                                 ViewCompat.setNestedScrollingEnabled(this, true)
                                 addJavascriptInterface(PinBridge(onCoordsChange), "AndroidPinBridge")
-                                loadDataWithBaseURL(LEAFLET_ASSET_BASE_URL, html, "text/html", "UTF-8", null)
+                                loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
                                 loadedHtml.value = html
                             }
                         },
@@ -382,7 +379,7 @@ fun EventLocationCard(
                             // de endereço) fazia a página ficar num loop de reload, nunca terminando de
                             // renderizar o mapa. Só recarrega quando as coordenadas realmente mudam.
                             if (loadedHtml.value != html) {
-                                webView.loadDataWithBaseURL(LEAFLET_ASSET_BASE_URL, html, "text/html", "UTF-8", null)
+                                webView.loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
                                 loadedHtml.value = html
                             }
                         }

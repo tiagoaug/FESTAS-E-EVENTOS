@@ -254,6 +254,7 @@ fun SettingsScreen(
     if (showCategoryDialog) {
         CategoryEditDialog(
             category = editingCategory,
+            existingNames = uiState.categories.map { it.name },
             onDismiss = { showCategoryDialog = false },
             onSave = { name, color ->
                 if (editingCategory != null) {
@@ -334,11 +335,17 @@ private fun SettingsCard(
 @Composable
 private fun CategoryEditDialog(
     category: CategoryEntity?,
+    existingNames: List<String>,
     onDismiss: () -> Unit,
     onSave: (name: String, color: String) -> Unit
 ) {
     var name by remember { mutableStateOf(category?.name ?: "") }
     var color by remember { mutableStateOf(category?.color ?: CATEGORY_COLOR_SWATCHES.first()) }
+
+    val trimmedName = name.trim()
+    val isDuplicate = trimmedName.isNotEmpty() && existingNames.any {
+        it.equals(trimmedName, ignoreCase = true) && !it.equals(category?.name, ignoreCase = true)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -349,6 +356,10 @@ private fun CategoryEditDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Nome da Categoria") },
+                    isError = isDuplicate,
+                    supportingText = {
+                        if (isDuplicate) Text("Já existe uma categoria com esse nome.")
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -361,7 +372,10 @@ private fun CategoryEditDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onSave(name.trim(), color) }) {
+            TextButton(
+                onClick = { onSave(trimmedName, color) },
+                enabled = trimmedName.isNotEmpty() && !isDuplicate
+            ) {
                 Text("Salvar")
             }
         },

@@ -61,22 +61,6 @@ fun ParticipantsScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Convidados & Rateio", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showAddParticipantDialog = true }) {
-                        Icon(imageVector = Icons.Default.PersonAdd, contentDescription = "Adicionar Convidado")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        },
         floatingActionButton = {
             com.example.ui.components.GradientFab(
                 onClick = { showAddParticipantDialog = true },
@@ -92,32 +76,43 @@ fun ParticipantsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Stats Header Badge
+            // Cabeçalho compacto: navegação + estatísticas num único card, sem título de
+            // tela — o rótulo "Convidados" já vem da barra de navegação inferior.
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
+                        .padding(start = 4.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Total", style = MaterialTheme.typography.labelSmall)
-                        Text("${uiState.participants.size} pessoas", fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
-                    Divider(modifier = Modifier.height(24.dp).width(1.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Adultos", style = MaterialTheme.typography.labelSmall)
-                        Text("${uiState.financialSummary.adultCount}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Divider(modifier = Modifier.height(24.dp).width(1.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Crianças", style = MaterialTheme.typography.labelSmall)
-                        Text("${uiState.financialSummary.childCount}", fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Total", style = MaterialTheme.typography.labelSmall)
+                            Text("${uiState.participants.size} pessoas", fontWeight = FontWeight.Bold)
+                        }
+                        Divider(modifier = Modifier.height(24.dp).width(1.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Adultos", style = MaterialTheme.typography.labelSmall)
+                            Text("${uiState.financialSummary.adultCount}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Divider(modifier = Modifier.height(24.dp).width(1.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Crianças", style = MaterialTheme.typography.labelSmall)
+                            Text("${uiState.financialSummary.childCount}", fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                        }
                     }
                 }
             }

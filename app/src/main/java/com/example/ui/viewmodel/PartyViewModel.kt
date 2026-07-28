@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -29,6 +30,8 @@ private const val SETTINGS_PREFS_NAME = "festas_eventos_settings"
 private const val KEY_USE_WHATSAPP = "use_whatsapp"
 private const val KEY_APP_THEME = "app_theme"
 private const val KEY_APP_FONT = "app_font"
+private const val KEY_CUSTOM_EVENT_TYPES = "custom_event_types"
+private const val CUSTOM_EVENT_TYPES_DELIMITER = "|||"
 
 /** Crianças pagam esta fração do valor do adulto no modo CostShareMode.DEFINE_LATER. */
 const val DEFINE_LATER_CHILD_WEIGHT = 0.5
@@ -93,6 +96,26 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
         settingsPrefs.edit().putString(KEY_APP_FONT, font.name).apply()
     }
 
+    private val _customEventTypes = MutableStateFlow(
+        settingsPrefs.getString(KEY_CUSTOM_EVENT_TYPES, null)
+            ?.split(CUSTOM_EVENT_TYPES_DELIMITER)
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+    )
+    val customEventTypes: StateFlow<List<String>> = _customEventTypes.asStateFlow()
+
+    /** Adiciona um tipo de evento personalizado ao final da lista fixa, persistido localmente. */
+    fun addCustomEventType(type: String, knownTypes: List<String>) {
+        val trimmed = type.trim()
+        if (trimmed.isEmpty()) return
+        val alreadyKnown = knownTypes.any { it.equals(trimmed, ignoreCase = true) } ||
+            _customEventTypes.value.any { it.equals(trimmed, ignoreCase = true) }
+        if (alreadyKnown) return
+        val updated = _customEventTypes.value + trimmed
+        _customEventTypes.value = updated
+        settingsPrefs.edit().putString(KEY_CUSTOM_EVENT_TYPES, updated.joinToString(CUSTOM_EVENT_TYPES_DELIMITER)).apply()
+    }
+
     /** Repository for the currently signed-in user, or null when signed out. */
     private val repository: PartyRepository?
         get() = authRepository.currentUser?.uid?.let { PartyRepository(it) }
@@ -144,6 +167,7 @@ class PartyViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
