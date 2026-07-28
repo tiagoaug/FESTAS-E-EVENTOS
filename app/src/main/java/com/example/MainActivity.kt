@@ -179,6 +179,7 @@ private fun GlassBottomNav(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Row(

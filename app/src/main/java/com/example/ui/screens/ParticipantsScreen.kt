@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -262,92 +264,214 @@ fun ParticipantsScreen(
             val isEditing = editingParticipant != null
             val itemToEdit = editingParticipant
 
+            // Campos usados tanto para editar quanto para o modo "Convidado Avulso"
             var name by remember { mutableStateOf(itemToEdit?.name ?: "") }
             var phone by remember { mutableStateOf(itemToEdit?.phone ?: "") }
             var familyGroup by remember { mutableStateOf(itemToEdit?.familyGroup ?: "Família Silva") }
             var type by remember { mutableStateOf(itemToEdit?.type ?: ParticipantType.ADULT) }
 
+            // Modo "Família": cadastra vários integrantes de uma vez, igual à versão web
+            var addMode by remember { mutableStateOf("AVULSO") }
+            var newFamilyName by remember { mutableStateOf("") }
+            val familyMembers = remember { mutableStateListOf(FamilyMemberDraft()) }
+            val validMemberCount = familyMembers.count { it.name.isNotBlank() }
+
+            fun closeDialog() {
+                showAddParticipantDialog = false
+                editingParticipant = null
+            }
+
             AlertDialog(
-                onDismissRequest = {
-                    showAddParticipantDialog = false
-                    editingParticipant = null
-                },
+                onDismissRequest = { closeDialog() },
                 title = { Text(if (isEditing) "Editar Convidado" else "Novo Convidado") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Nome do Participante") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 460.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (!isEditing) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = (addMode == "AVULSO"),
+                                    onClick = { addMode = "AVULSO" },
+                                    label = { Text("Convidado Avulso") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = (addMode == "FAMILIA"),
+                                    onClick = { addMode = "FAMILIA" },
+                                    label = { Text("Família") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
 
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = { Text("Telefone / WhatsApp (DDDNumeros)") },
-                            placeholder = { Text("Ex: 11999998888") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = familyGroup,
-                            onValueChange = { familyGroup = it },
-                            label = { Text("Grupo / Nome da Família") },
-                            placeholder = { Text("Ex: Família Silva, Amigos do Trabalho") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Text("Classificação:", style = MaterialTheme.typography.labelMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            FilterChip(
-                                selected = (type == ParticipantType.ADULT),
-                                onClick = { type = ParticipantType.ADULT },
-                                label = { Text("Adulto") }
+                        if (isEditing || addMode == "AVULSO") {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Nome do Participante") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
-                            FilterChip(
-                                selected = (type == ParticipantType.CHILD),
-                                onClick = { type = ParticipantType.CHILD },
-                                label = { Text("Criança") }
+
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                label = { Text("Telefone / WhatsApp (DDDNumeros)") },
+                                placeholder = { Text("Ex: 11999998888") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
+
+                            if (isEditing) {
+                                OutlinedTextField(
+                                    value = familyGroup,
+                                    onValueChange = { familyGroup = it },
+                                    label = { Text("Grupo / Nome da Família") },
+                                    placeholder = { Text("Ex: Família Silva, Amigos do Trabalho") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                            }
+
+                            Text("Classificação:", style = MaterialTheme.typography.labelMedium)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                FilterChip(
+                                    selected = (type == ParticipantType.ADULT),
+                                    onClick = { type = ParticipantType.ADULT },
+                                    label = { Text("Adulto") }
+                                )
+                                FilterChip(
+                                    selected = (type == ParticipantType.CHILD),
+                                    onClick = { type = ParticipantType.CHILD },
+                                    label = { Text("Criança") }
+                                )
+                            }
+                        } else {
+                            OutlinedTextField(
+                                value = newFamilyName,
+                                onValueChange = { newFamilyName = it },
+                                label = { Text("Nome da Família") },
+                                placeholder = { Text("Ex: Família Silva") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Text("Integrantes:", style = MaterialTheme.typography.labelMedium)
+                            familyMembers.forEachIndexed { index, member ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = member.name,
+                                        onValueChange = { member.name = it },
+                                        placeholder = { Text("Nome ${index + 1}") },
+                                        modifier = Modifier.weight(2f),
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = member.phone,
+                                        onValueChange = { member.phone = it },
+                                        placeholder = { Text("Telefone") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true
+                                    )
+                                    FilterChip(
+                                        selected = member.type == ParticipantType.CHILD,
+                                        onClick = {
+                                            member.type = if (member.type == ParticipantType.ADULT) ParticipantType.CHILD else ParticipantType.ADULT
+                                        },
+                                        label = { Text(if (member.type == ParticipantType.ADULT) "Ad." else "Cri.") }
+                                    )
+                                    if (familyMembers.size > 1) {
+                                        IconButton(onClick = { familyMembers.removeAt(index) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Remover", tint = Color(0xFFD32F2F))
+                                        }
+                                    }
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { familyMembers.add(FamilyMemberDraft()) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Adicionar Integrante")
+                            }
                         }
                     }
                 },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            if (name.isNotBlank() && activeEvent != null) {
-                                val p = ParticipantEntity(
-                                    id = itemToEdit?.id ?: "",
-                                    eventId = activeEvent.id,
-                                    name = name,
-                                    phone = phone,
-                                    type = type,
-                                    familyGroup = familyGroup.ifBlank { "Sem Família" },
-                                    paidAmount = itemToEdit?.paidAmount ?: 0.0
-                                )
-                                if (isEditing) {
-                                    viewModel.updateParticipant(p)
-                                } else {
-                                    viewModel.addParticipant(p)
+                            if (activeEvent != null) {
+                                when {
+                                    isEditing -> {
+                                        if (name.isNotBlank()) {
+                                            viewModel.updateParticipant(
+                                                ParticipantEntity(
+                                                    id = itemToEdit?.id ?: "",
+                                                    eventId = activeEvent.id,
+                                                    name = name,
+                                                    phone = phone,
+                                                    type = type,
+                                                    familyGroup = familyGroup.ifBlank { "Sem Família" },
+                                                    paidAmount = itemToEdit?.paidAmount ?: 0.0
+                                                )
+                                            )
+                                        }
+                                    }
+                                    addMode == "AVULSO" -> {
+                                        if (name.isNotBlank()) {
+                                            viewModel.addParticipant(
+                                                ParticipantEntity(
+                                                    eventId = activeEvent.id,
+                                                    name = name,
+                                                    phone = phone,
+                                                    type = type,
+                                                    familyGroup = "Sem Família",
+                                                    paidAmount = 0.0
+                                                )
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        val validMembers = familyMembers.filter { it.name.isNotBlank() }
+                                        if (newFamilyName.isNotBlank() && validMembers.isNotEmpty()) {
+                                            validMembers.forEach { member ->
+                                                viewModel.addParticipant(
+                                                    ParticipantEntity(
+                                                        eventId = activeEvent.id,
+                                                        name = member.name,
+                                                        phone = member.phone,
+                                                        type = member.type,
+                                                        familyGroup = newFamilyName,
+                                                        paidAmount = 0.0
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                            showAddParticipantDialog = false
-                            editingParticipant = null
+                            closeDialog()
                         }
                     ) {
-                        Text("Salvar")
+                        Text(if (!isEditing && addMode == "FAMILIA") "Salvar Família ($validMemberCount)" else "Salvar")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
-                        showAddParticipantDialog = false
-                        editingParticipant = null
-                    }) {
+                    TextButton(onClick = { closeDialog() }) {
                         Text("Cancelar")
                     }
                 }
@@ -574,4 +698,11 @@ private fun ActionPillButton(
             )
         }
     }
+}
+
+/** Rascunho de um integrante ao cadastrar uma família inteira de uma vez. */
+private class FamilyMemberDraft {
+    var name by mutableStateOf("")
+    var phone by mutableStateOf("")
+    var type by mutableStateOf(ParticipantType.ADULT)
 }
